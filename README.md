@@ -1,4 +1,4 @@
-# tensor decomposition library
+# tensor decomposition library (wip)
 
 a python library for efficient tensor decomposition, featuring multiple optimization methods for cp (canonical polyadic) and tucker decompositions.
 
