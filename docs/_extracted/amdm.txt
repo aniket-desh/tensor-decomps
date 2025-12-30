@@ -1,0 +1,2708 @@
+ALTERNATING MAHALANOBIS DISTANCE MINIMIZATION FOR STABLE AND
+ACCURATE CP DECOMPOSITION
+
+NAVJOT SINGH˚ AND EDGAR SOLOMONIK˚.
+
+Abstract. CP decomposition (CPD) is prevalent in chemometrics, signal processing, data mining and many more fields.
+While many algorithms have been proposed to compute the CPD, alternating least squares (ALS) remains one of the most
+widely used algorithm for computing the decomposition. Recent works have introduced the notion of eigenvalues and singular
+values of a tensor and explored applications of eigenvectors and singular vectors in areas like signal processing, data analytics
+and in various other fields. We introduce a new formulation for deriving singular values and vectors of a tensor by considering the
+critical points of a function different from what is used in the previous work. Computing these critical points in an alternating
+manner motivates an alternating optimization algorithm which corresponds to alternating least squares algorithm in the matrix
+case. However, for tensors with order greater than equal to 3, it minimizes an objective function which is different from the
+commonly used least squares loss. Alternating optimization of this new objective leads to simple updates to the factor matrices
+with the same asymptotic computational cost as ALS. We show that a subsweep of this algorithm can achieve a superlinear
+convergence rate for exact CPD with known rank and verify it experimentally. We then view the algorithm as optimizing a
+Mahalanobis distance with respect to each factor with ground metric dependent on the other factors. This perspective allows
+us to generalize our approach to interpolate between updates corresponding to the ALS and the new algorithm to manage the
+tradeoff between stability and fitness of the decomposition. Our experimental results show that for approximating synthetic
+and real-world tensors, this algorithm and its variants converge to a better conditioned decomposition with comparable and
+sometimes better fitness as compared to the ALS algorithm.
+
+Key words. tensor decomposition, CP decomposition, alternating least squares, eigenvalues, singular values, Mahalanobis
+Distance, condition number
+
+AMS subject classifications. 15A69, 15A72, 65K10, 65Y20, 65Y04, 65Y05, 68W25
+
+1. Introduction. The canonical polyadic or CANDECOMP/PARAFAC (CP) tensor decomposition [19,
+22] is used for analysis and compression of multi-parameter datasets, and prevalent in tensor methods for
+scientific simulation [15,38,41,49]. For an order 3 tensor TTT , a rank R CP decomposition is
+
+TTT “ rrA, B, Css,
+tijk “
+
+R
+ÿ
+
+r“1
+airbjrckr.
+
+Determining the CP rank or finding an approximate CP decomposition of a tensor, so as to minimize,
+
+fpA, B, Cq “ 1
+
+2
+
+›››TTT ´ rrA, B, Css
+›››
+2
+
+F ,
+(1.1)
+
+are NP-hard problems [21]. The CP decomposition of a tensor can be computed via various optimization
+algorithms, such as alternating least squares [5,20,24,48] which aims to minimize the objective (1.1) in an
+alternating manner by considering all except one factor matrix fixed. There have been several attempts to
+improve the performance of ALS algorithm by considering it’s variations [36,40,42,47]. Several methods which
+aim to minimize (1.1) with respect to all the factor matrices use gradient-based information [1,43,45,51,54,57]
+to update all the factors simultaneously. Another set of methods optimize for all the factors simultaneously
+by formulating (1.1) as a nonlinear least squares problem by considering the entries of all the factors as
+variables.
+In addition to gradient information, these iterative methods use second order information to
+compute the next step which requires a system solve [43,56], and can be achieved by an implicit conjugate
+gradient algorithm [50,51].
+Tensor eigenvalue problems are relevant in the context of solving multilinear systems, simulating quantum systems, exponential data fitting and many other application areas [46]. However, the study of tensor
+eigenvalues and tensor singular values is at a relatively nascent stage, [32, 35] provide a definition and introduction to eigenvalues and singular values of a tensor.
+Computing eigenvalues of a tensor is a hard
+problem, and can be solved via iterative methods for special cases such as computing a subset of eigenvalues
+of a tensor [30] or computing the real eigenvalues pairs of a real symmetric tensor [16]. The tensor eigenvalue problem is motivated by applications like blind source separation [7], independent component analysis
+
+˚Department of Computer Science, University of Illinois at Urbana-Champaign, Urbana, IL, 61801 (navjot2@illinois.edu,
+solomon2@illinois.edu).
+
+1
+
+arXiv:2204.07208v2  [cs.LG]  10 May 2022
+
+(ICA) [23] which also motivate a closely related problem of diagonalizing a tensor. The concept of tensor
+diagonalization was introduced in [14], where approximate diagonalization of the tensor is considered by
+minimizing the sum of squares of off-diagonal entries or maximizing the sum of squares of diagonal entries of
+the tensor. There have been many follow up works [33,34,55,59] which consider approximate diagonalization
+of the tensor by invertible and orthogonal transformations.
+In this work, we introduce a formulation for computing the singular values and vectors of a tensor by
+considering a logarithmic penalty function instead of Lagrangian variables [35] and computing the critical
+points of this function. This formulation when generalized to computing invariant subspaces of a matrix,
+leads to diagonalization of the matrix and can be linked to the singular values and vectors of the matrix.
+When extended to tensors with order greater than or equal to 3, this formulation leads to another notion
+of diagonalization of the tensor which is different from the one introduced in prior work.
+The critical
+points of this new function spectrally diagonalize the tensor, i.e., the transformed equidimensional tensor
+of mode length R has R elementary eigenvectors with unit eigenvalues. Computing these stationary points
+alternatively motivates an alternating optimization algorithm for computing the CP decomposition of a
+tensor.
+
+1.1. Motivation: Eigenvectors via Lagrangian Optimization. In the case of low-rank matrix
+approximation, the Eckart-Young-Mirsky theorem shows that the best low-rank approximation may be
+obtained from the singular value decomposition (SVD). This connection relates low-rank factors to critical
+points of the bilinear form, fpx, yq “ xT Ay with }x} ‰ 0, }y} ‰ 0. For tensors of order 3 and higher,
+tensor singular values have been similarly derived from critical points of multilinear forms. In particular,
+Lim [35] derives singular vectors and singular values by imposing constrains }x} “ }y} “ 1 and considering
+the critical points of the Lagrangian function. The same results may be obtained by instead considering a
+logarithmic interior point barrier function for the constraints, }x} ‰ 0, }y} ‰ 0, so
+
+fpx, yq “ xT Ay ´ logp}x}}y}q,
+∇fpx, yq “ 0 ñ Ay “ x{}x}2, AT x “ y{}y}2.
+
+Consequently, with σ “ 1{p}x}}y}q and u “ x{}x}, v “ y{}y}, we have Av “ σu and AT u “ σv. The use
+of a coefficient for the barrier function only affects the scaling of any critical point vectors, x and y. For
+tensors of order 3 and higher, tensor singular values can be similarly derived from critical points of
+
+fpxp1q, . . . , xpNqq “
+ÿ
+
+i1...iN
+ti1...iN xp1q
+i1 ¨ ¨ ¨ xpNq
+iN ´ logp}xp1q} ¨ ¨ ¨ }xpNq}q,
+
+∇fpxp1q, . . . , xpNqq “ 0 ñ
+xpjq
+ij
+}xpjq}2 “
+ÿ
+
+i1...ˆij...iN
+ti1...iN xp1q
+i1 ¨ ¨ ¨ ˆxpjq
+ij ¨ ¨ ¨ xpNq
+iN ,
+
+where i . . . ˆj . . . k implies j is omitted from the sequence. The use of 2-norm in the above definitions leads
+to l2 singular vectors [35] and with a symmetric tensor and each xpiq “ xpjq it yields Z-eigenvectors [32].
+Choosing another vector norm in t3, . . . , Nu leads to other notions of singular vectors and eigenvectors [32].
+The only significant known correspondence between tensor singular vectors or eigenvectors and the CP
+decomposition, is in the case of a rank R “ 1 CP. In this case, the singular vector with the largest singular
+value and the best rank-1 approximation coincide (for symmetric tensors, these also correspond to the largest
+eigenvalue tensor eigenvector). The rank-1 approximation problem is also NP-hard for tensors of order 3
+and higher [21]. In this work, motivated by an efficient iterative scheme, we consider an extension of the
+variational notion of a single singular vector tuple to many.
+
+1.2. Tensor Spectral Diagonalization via Lagrangian Optimization. We denote an inner product of matrices as xX, Y y “ xvecpXq, vecpY qy, and similar for tensors XXX, YYY. The invariant subspaces of a
+matrix A may be obtained by considering the critical points of a generalization of xT Ay “ xA, xyT y to the
+matrix case,
+
+fpX, Y q “ xA, XY T y, s.t.
+detpXT Xq ‰ 0, detpY T Y q ‰ 0.
+
+2
+
+Transforming the inequality constraint into a logarithmic barrier function, we obtain
+
+LfpX, Y q “ xA, XY T y ´ 1
+
+2plogpdetpXT Xqq ´ logpdetpY T Y qqq
+(1.2)
+
+“ trpXT AY q ´ 1
+
+2 trplogpXT XY T Y qq.
+(1.3)
+
+The critical points of Lf satisfy,
+AY XT – I and AT XY T – I.
+
+At a critical point of fpX, Y q, the column span of X, spantx1, . . . xnu, must be an invariant subspace of
+AAT , while the columns of Y span an invariant subspace of AT A. These critical points diagonalize A in
+the sense that XT AY “ I. In the tensor case, a critical point pXp1q, . . . , XpNqq of
+
+fpXp1q, . . . , XpNqq “ xTTT , rrXp1q, . . . XpNqssy, s.t. detpXpnqT Xpnqq ‰ 0, @n P t1, . . . , Nu,
+
+LfpXp1q, . . . , XpNqq “
+
+R
+ÿ
+
+r“1
+
+ÿ
+
+i1...iN
+ti1...iN xp1q
+i1r ¨ ¨ ¨ xpNq
+iNr ´ 1
+
+2 trplogpXp1qT Xp1q ¨ ¨ ¨ XpNqT XpNqqq
+(1.4)
+
+gives invariant subspaces of the tensor in the sense that, @i P t1, . . . , Nu,
+
+@v P spant
+â
+
+j‰i
+xpjq
+1 , . . . ,
+â
+
+j‰i
+xpjq
+R u,
+Tpiqv P spantxpiq
+1 , . . . , xpiq
+R u,
+
+where Tpiq is the mode-i matricization (unfolding) of the tensor TTT .
+
+Since the reconstructed tensor ˜TTT , where ˜TTT “ rrY p1q, . . . Y pNqss, Y pnq “ Xpnq:T , @n P t1, . . . , Nu,
+captures the action of Tpiq on an invariant subspace, the application of each matricization may be performed
+with bounded backward error. In Section 5.1.1, we show that the backward error is bounded by }TpiqzK},
+where zK is the projection of z onto the orthogonal complement of column span of ÄN
+j“1,j‰n Xpjq. We
+show that this bound also holds for ALS, and in general for a family of algorithms based on alternating
+minimization of Mahalanobis distance [12] between the input and reconstructed tensor.
+Another observation regarding the critical points of (1.4) is that each matricization of the tensor reconstructed from a critical point, XXX “ rrXp1q, . . . XpNqss is a right inverse of the corresponding matricization of
+the input tensor TTT when CP rank is equal to the mode length and more generally,
+
+TpiqXT
+piq “ Πpiq,
+@i P t1, . . . , Nu,
+
+where each Πpiq is a projector onto the column space of Xpiq. This XXX satisfies some but not all of the
+properties of previously proposed generalizations of the Moore-Penrose inverse to tensors [34,52].
+Further, the critical point gives a transformation that spectrally diagonalizes TTT ,
+
+zj1...jN “
+ÿ
+
+i1...iN
+ti1...iN xp1q
+i1j1 ¨ ¨ ¨ xpNq
+iNjN ,
+
+so that ZZZ has R eigenvectors that are elementary vectors with unit eigenvalues (for any tensor eigenvector/eigenvalue definition, i.e., lp eigenvector for any choice of p [32]), since
+
+zjkjk...jpjk...jk “ δjkjp for all p ‰ k P t1, . . . , Nu.
+
+Beyond these properties, we show that Xp1q:T , . . . , XpNq:T may be used to obtain an exact CP decomposition
+or an effective low-rank approximate CP decomposition.
+
+1.3. Alternating Optimization Method. The critical points defined above may be computed efficiently by a method similar to ALS. ALS solves a set of overdetermined linear equations at each step to
+minimize Frobenius norm error relative to one factor, e.g., it solves for A in
+
+pC d BqAT – T T
+p1q.
+
+3
+
+The update rule for each subproblem, may be written as a product of the pseudoinverse of the Khatri-Rao
+product of two factors and an unfolding of the tensor, i.e.,
+
+A “ Tp1qpC d Bq:T .
+
+Some of the major advantages of the ALS algorithm is its guaranteed monotonic decrease in residual, low
+per-iteration computational cost, and amenability to parallelization. It has been shown that ALS achieves
+linear local convergence to minima of the CP residual norm [58].
+To obtain a critical point in the high-order tensor function (1.4), we propose a different alternating
+update scheme, which finds the solution U to the linear least squares problem,
+
+pTp1qpW d V qqU T – I.
+
+With AT “ U :, BT “ V :, and CT “ W :, we observe that the update is similar to that of ALS,
+
+A “ Tp1qpC:T d B:T q.
+
+A stationary point of this alternating update scheme provides a critical point of (1.4).
+
+1.4. Convergence Results. The new alternating update scheme is highly effective at finding an exact
+CP decomposition, if one exists. In particular, we show that the method achieves a superlinear rate of
+local convergence to exact CP decompositions.
+In Section 4, we prove that the convergence order is α
+per subproblem or αN per sweep of alternating updates, where α is the unique real root of the polynomial
+xN´1´řN´2
+i“0 xi. For N “ 3, α “ p1`
+?
+
+5q{2, while for higher N, α increases. A superlinear convergence rate
+for CP decomposition is also achievable via general optimization algorithms such as Gauss-Newton [50,51].
+However, the alternating optimization scheme we propose has a much lower per iteration cost (about the
+same as ALS, which achieves only linear convergence).
+For a given tensor and any choice of rank, the critical points are generally not unique (as in the case
+of matrices). Theoretical characterization of the conditions under which critical points of (1.4) exist in this
+scenario remains an open problem as it requires proving existence of roots of a system of nonlinear equations
+that have the same number of variables and equations. Note that the problem of proving if the best CP rank
+approximation exists also requires existence of a solution of system of nonlinear equations. The best CP rank
+approximation may not exist, which has lead to the notion of border rank [29]. Consequently, establishing
+existence of critical points for our scenario is likely also nontrivial. Therefore, with the assumption that a
+critical point exists, we show in Section 4.1 that the proposed iterative scheme achieves local convergence to
+it (in this case, at a linear rate).
+We perform numerical experiments in Section 6 to confirm the rate of convergence of the algorithm for
+computing CP decomposition of different tensors with known rank. The observed rate of convergence values
+agree with the theoretical rate of convergence with an error of about 0.2% for order 3 and an error of about
+1% for order 4 tensors. The experiments also confirm the convergence analysis of the algorithm to stationary
+points for approximate decomposition of tensors as described in Lemma 4.4
+
+1.5. Generalizations and Experimental Evaluation. The proposed algorithm may also be used for
+approximate CP decomposition, but does not minimize the Frobenius norm of the residual directly. Instead,
+when optimizing for A, the algorithm minimizes
+››pI b B: b C:q vecpTTT ´ rrA, B, Cssq
+››
+F .
+
+For a fixed residual error in the decomposition, the magnitude of this error metric will generally depend
+on the conditioning of A, B, and C. Hence, this alternating minimization procedure tends to converge to
+well-conditioned factors (and well-conditioned CP decompositions [9,60]).
+We generalize this method by considering a Mahalanobis distance between the input and reconstructed
+tensor. The original motivation for Mahalanobis distance minimization of tensors came from the work on
+minimization of Wasserstein distance between tensors for nonnegative CP decomposition [2]. This generalization allows us to reformulate each update to a factor of the above introduced algorithm as a minimizer of
+a Mahalanobis distance [12] with the ground metric dependent on the other remaining factors. This reformulation helps extend the introduced algorithm to any CP rank by using the same ground metric. Moreover, we
+
+4
+
+are able to interpolate between the introduced algorithm and ALS by interpolating the ground metric. Our
+experiments in Section 6 suggest that the interpolated updates help manage the trade-off between fitness
+and conditioning of the decomposition. We measure conditioning of the decomposition by computing the
+normalized CPD condition number [9]. The condition number can be computed in an efficient manner for
+decompositions with small CP rank by compressing the matrix for which the smallest singular value needs to
+be computed and henceforth reducing the computational cost significantly as described in Appendix A. By
+using this efficient approach, we are able to track condition number of the decomposition at each iteration
+of the algorithms. For synthetic as well as real-world tensors, we observe that by utilizing hybrid updates of
+the introduced algorithm, we can find decompositions with a condition number lower by a factor as large as
+104 with a change in fitness of about 0.01 only when compared to ALS.
+
+2. Background. We introduce the notation and definitions used in the subsequent sections here along
+with a brief introduction to the alternating least squares algorithm for computing CP decomposition [11,19].
+
+2.1. Notation and Definitions. We use tensor algebra notation in both element- wise form and
+specialized form for tensor operations [29]. For vectors, bold lowercase Roman letters are used, e.g., x. For
+matrices, bold uppercase Roman letters are used, e.g., X. For tensors, bold calligraphic fonts are used, e.g.,
+XXX. An order N tensor corresponds to an N-dimensional array with dimensions s1 ˆ ¨ ¨ ¨ ˆ sN. Elements of
+vectors, matrices, and tensors are denoted in subscript, e.g., xi for a vector x, xij for a matrix X, and xijkl
+for an order 4 tensor XXX. The ith column of a matrix X is denoted by xi. The mode-n matrix product of a
+tensor XXX P Rs1ˆ¨¨¨ˆsN with a matrix A P RJˆsn is denoted by XXX ˆn A, with the result having dimensions
+s1 ˆ ¨ ¨ ¨ ˆsn´1 ˆ J ˆ sn`1 ˆ ¨ ¨ ¨ ˆsN. Matricization is the process of reshaping a tensor into a matrix. Given
+a tensor XXX the mode-n matricized version is denoted by Xpnq P RsnˆK where K “ śN
+m“1,m‰n sm. We
+use parenthesized superscripts as labels for different tensors and matrices, e.g., Ap1q and Ap2q are different
+matrices.
+The Hadamard product of two matrices U, V P RIˆJ resulting in matrix W P RIˆJ is denoted by
+W “ U˚V , where wij “ uijvij. The inner product of matrices U, V is denoted by xU, V y “ ř
+i,j uijvij. The
+outer product of K vectors up1q, . . . , upKq of corresponding sizes s1, . . . , sK is denoted by XXX “ up1q ˝¨ ¨ ¨˝upKq
+
+where XXX P Rs1ˆ¨¨¨ˆsK is an order K tensor.
+For matrices A P RIˆK “
+“
+a1, . . . , aK
+‰
+and B P RJˆK “
+“
+b1, . . . , bK
+‰
+, their Khatri-Rao product
+resulting in a matrix of size pIJq ˆ K defined by A d B “ ra1 b b1, . . . , aK b bKs, where a b b denotes
+the Kronecker product of the two vectors. We define the Mahalanobis norm for a matrix A with ground
+metric M as }A}M “
+a
+
+vecpAqT M vecpAq and similarly for tensor TTT , }TTT }M “ vecpTTT qT M vecpTTT q. To ease
+the notation for N khatri Rao products, we use ÄN
+n“1 “ ApNq d . . . d Ap1q and similarly ÂN
+n“1 Apnq “
+ApNq b . . . b Ap1q,˚N
+n“1 Apnq “ ApNq ˚ . . . ˚ Ap1q. We use σminpP q to denote the minimum singular value of
+the matrix P .
+
+2.2. Alternating least squares for CP decomposition. The CP tensor decomposition [19,22] for
+an input tensor XXX P RI1ˆ¨¨¨ˆIN is denoted by
+
+XXX « rrAp1q, ¨ ¨ ¨ , ApNqss,
+where
+Apiq “ rapiq
+1 , ¨ ¨ ¨ , apiq
+r s,
+
+and serves to approximate a tensor by a sum of R tensor products of vectors,
+
+XXX «
+
+R
+ÿ
+
+r“1
+ap1q
+r
+˝ ¨ ¨ ¨ ˝ apNq
+r
+.
+
+It is sometimes useful to normalize the factor matrices so that each column of the factors has a unit 2-norm
+and the weights are absorbed into a vector λ P RR, given as,
+
+XXX «
+
+R
+ÿ
+
+r“1
+ap1q
+r
+˝ ¨ ¨ ¨ ˝ apNq
+r
+“
+
+R
+ÿ
+
+r“1
+λr¯ap1q
+r
+˝ ¨ ¨ ¨ ˝ ¯apNq
+r
+,
+
+where ¯
+Apnq are column normalized for all n and denoted as
+
+XXX « rrΛ; ¯
+Ap1q, ¨ ¨ ¨ , ¯
+ApNqss,
+
+5
+
+where Λ is a diagonal matrix with λ on the diagonal. The CP-ALS method aims to minimize the nonlinear
+least squares problem
+
+(2.1)
+fpAp1q, . . . , ApNqq :“ 1
+
+2
+
+ˇˇˇ
+ˇˇˇXXX ´ rrAp1q, ¨ ¨ ¨ , ApNqss
+ˇˇˇ
+ˇˇˇ
+2
+
+F ,
+
+by alternatively minimizing a sequence of least squares problems for each of the factor matrices Apnq. This
+results in linear least squares problems for each row,
+
+Apnq
+newP pnqT – Xpnq,
+
+where the matrix P pnq P RDnˆR, where Dn “ śN
+i“1,i‰n Ii is formed by Khatri-Rao products of the other
+factor matrices,
+
+P pnq “
+
+N
+ä
+
+m“1,m‰n
+Apmq.
+(2.2)
+
+These linear least squares problems are often solved via the normal equations [29],
+
+Apnq
+newΓpnq Ð XpnqP pnq,
+
+where Γ P RRˆR can be computed via
+
+(2.3)
+Γpnq “
+N˚
+i“1,i‰n Spiq,
+
+with each Spiq “ ApiqT Apiq. The Matricized Tensor Times Khatri-Rao Product or MTTKRP computation
+M pnq “ XpnqP pnq is the main computational bottleneck of CP-ALS [4]. For a rank-R CP decomposition, this
+computation has the cost of OpINRq if In “ I for all n P t1, . . . , Nu. There have been various developments
+to optimize computation of MTTKRP, like dimension-tree algorithm [3,25–27,44,61] for dense tensors and
+sparse MTTKRP [13] for sparse tensors.
+
+Algorithm 3.1 Basic description of the new alternating update scheme.
+
+1: Input: Tensor XXX P RI1ˆ¨¨¨ˆIN , rank R
+
+2: Initialize tAp1q, . . . , ApNqu so each Apnq P RInˆR is random
+3: while not converged do
+4:
+for n P t1, . . . , Nu do
+
+5:
+Apnq “ XpNq
+pnq
+
+ˆ ÄN
+m“1,m‰n Apmq:T
+˙
+
+6:
+end for
+7: end while
+8: return factor matrices tAp1q, . . . , ApNqu
+
+3. Basic Description of the New Algorithm. We first provide a complete description of the alternating update scheme proposed in the introduction. To compute the decomposition of a tensor XXX, the
+algorithm maintains a CP decomposition given by
+
+rrAp1q, ¨ ¨ ¨ , ApNqss,
+
+and updates each Apnq in an alternating manner,
+
+Apnq “ Xpnq
+
+ˆ
+N
+ä
+
+m“1,m‰n
+Apmq:T
+˙
+.
+(3.1)
+
+6
+
+This update may be written in elementwise form in terms of the pseudoinverses U pmq “ Apmq: as
+
+apnq
+inr “
+ÿ
+
+i1...ˆin...iN
+xi1...iN
+
+N
+ź
+
+m“1,m‰n
+upmq
+rim.
+
+Algorithm 3.1 details each sweep of such updates. Like with the ALS, it is advisable to recalibrate the
+norms of the columns of each factor before the subsweep corresponding to nth factor so that }apkq
+r } “ 1 for
+all k ‰ n and r. With this recalibration, a valid convergence criteria is to check whether the magnitude
+of change in the factors exceeds a predefined threshold at each sweep.
+The method is invariant to the
+rescaling in exact arithmetic, but this calibration helps reduce the effects of round-off error. This calibration
+is also cost efficient, since pseudoinverse of only one matrix changes per subweep. This makes the algorithm
+accessible to all the optimizations involved in computing Matricized Tensor Times Khatri-Rao Product or
+MTTKRP in each subsweep of ALS such as the dimension tree algorithm [3,25–27,44,61].
+
+3.1. Cost Analysis. The cost of each sweep of Algorithm 3.1 corresponds to the cost of computing the
+pseudoinverse of each factor, as well as a set of N MTTKRP operations. A dimension tree or multi-sweep
+dimension tree [37] may be used to compute the set of MTTKRPs in the same way as done in the alternating
+least squares algorithm. The overall per-sweep cost with a multi-sweep dimension tree is then given by
+
+2N
+N ´ 1
+
+N
+ź
+
+n“1
+InR ` O
+´
+p
+
+N
+ÿ
+
+n“1
+InqR2¯
+.
+
+The cost of an ALS sweep with a multi-sweep dimension tree is
+
+2N
+N ´ 1
+
+N
+ź
+
+n“1
+InR ` OpNR3q,
+
+which is less expensive as solving an overdetermined system via normal equations is cheaper than computing
+the pseudoinverse of a matrix. If XXX is sparse, the method can benefit from existing work on efficiently
+performing MTTKRP with a sparse tensor [13] and therefore has the same leading order cost per-sweep as
+that of ALS for sparse tensors as well.
+
+4. Convergence Rate for Exact Decomposition. In this section, we theoretically analyze the
+asymptotic rate of local convergence of the Algorithm 3.1 for when an exact CP decomposition of rank R
+less than equal to the length of all modes of the tensor exists. To derive the rate of convergence for an exact
+decomposition, we relate the distance between the computed factor in each subproblem and the true factor,
+to the error in the other factor matrices. The following lemma states the error in computing ApNq, but can
+be trivially extended to any Apnq for n P t1, . . . , nu. We consider the error in the normalized factor and the
+error in the magnitude of CPD components modulo column scaling.
+
+Lemma 4.1. Suppose XXX “ rrD; Ap1q, . . . , ApNqss, where each Apiq P RsiˆR with si ě R is full rank and
+has normalized columns, i.e., }apiq
+j }2 “ 1 for all i, j and ¯
+Apnq “ Apnq ` ∆pnq also has normalized columns
+and satisfies }∆pnq}F “ ϵn for n “ 1, . . . , N ´ 1, then Dϵ ą 0 such that if ϵn ă ϵ for n “ 1, . . . , N ´ 1, then
+
+˜
+ApNq “ XpNqp ¯
+Ap1q:T d ¨ ¨ ¨ d ¯
+ApN´1q:T q
+
+where ˜
+ApNq “ ¯
+ApNq ¯D ensures that ¯
+ApNq are normalized, and satisfies
+
+} ¯
+ApNq ´ ApNq}F “ O
+ˆ
+N
+ź
+
+n“1
+ϵN´1
+n
+
+˙
+,
+
+and
+} ¯D ´ D}F “ Opϵq.
+
+7
+
+Proof. Let ϵ ă 1 and ϵ ă minnpσminpApnqqq for each n, and therefore ¯
+Apnq is full rank for each n “
+1, . . . , N ´ 1. Substituting the decomposition of XXX into the computed solution, we obtain
+
+˜
+ApNq “ ApNqD
+ˆ
+p ¯
+Ap1q:p ¯
+Ap1q ´ ∆p1qqq ˚ ¨ ¨ ¨ ˚ p ¯
+ApN´1q:p ¯
+ApN´1q ´ ∆pN´1qqq
+˙T
+
+“ ApNqD
+ˆ
+pI ´ ¯
+Ap1q:∆p1qq ˚ ¨ ¨ ¨ ˚ pI ´ ¯
+ApN´1q:∆pN´1qq
+˙T
+
+“ ApNqD
+ˆ
+S ` p´1qN´1 ¯
+Ap1q:∆p1q ˚ ¨ ¨ ¨ ˚ ¯
+ApN´1q:∆pN´1q
+˙T
+.
+
+where S includes all cross-terms of the Hadamard products, which must be diagonal since any such term
+includes a Hadamard product with an identity matrix. Since,
+
+}I ´ S}F “ Opmax
+n pϵnqq “ Opϵq,
+
+S is full rank for sufficiently small ϵ. Let
+
+∆“
+ˆ
+p´1qN´1 ¯
+Ap1q:∆p1q ˚ ¨ ¨ ¨ ˚ ¯
+ApN´1q:∆pN´1q
+˙T
+.
+
+Now, the norm calibration diagonal matrix is defined so that ¯dii “ }˜apNq
+i
+}2. Since,
+
+˜
+ApNq “ ApNqDpS ` ∆q “ ApnqD ` ApnqDpS ` ∆´ Iq,
+
+and }S ` ∆´ I}2 “ Opϵq, we have
+
+¯dii “ }˜apNq
+i
+}2 ď }apNq
+i
+}2dii ` }ApNqD}F }S ` ∆´ I}2 “ }apNq
+i
+}2dii ` Opϵq “ dii ` Opϵq.
+
+Consequently, } ¯
+D ´ D}2 “ Opϵq. Further, we can obtain a tighter bound (in terms of Op}∆}F q instead of
+Opϵq) by considering, ˜
+ApNq “ ApNqDSpI ` S´1∆q, so
+
+¯dii “ }˜apNq
+i
+}2 ď }apNq
+i
+}2diisii ` }ApNqD∆}F “ diisii ` Op}∆}F q.
+
+This bound allows us to get the desired result for the error in the factor matrices,
+
+} ¯
+ApNq ´ ApNq}F “ } ˜
+ApNq ¯D´1 ´ ApNq}F “ }ApNqDSpI ` S´1∆q ¯D´1 ´ ApNq}F
+“ Op}I ´ DSpI ` S´1∆q ¯D´1}F q.
+(4.1)
+
+Since, we have that } ¯D ´ DS}F “ Op}∆}F q,
+
+}I ´ DSpI ` S´1∆q ¯D´1}F “ }I ´ DS ¯D´1 ` D∆¯D´1}F
+“ } ¯D ¯D´1 ´ DS ¯D´1 ` D∆¯D´1}F
+“ Op}∆}F q ` }D∆¯D´1}F “ Op}∆}F q.
+
+Since, }∆}F “ O
+´ śN
+n“1 ϵN´1
+n
+¯
+, this completes the proof.
+
+The above Lemma states that in Algorithm 3.1, the error in the updated CPD factor relative to the true
+CPD factor is bounded by the product of errors in the previous N ´ 1 factors. Using this error bound, we
+derive convergence rate for Algorithm 3.1.
+
+Lemma 4.2. For any algorithm where the error in the update is of the order of product of error in
+previous k updates, the rate of convergence is equal to the positive root of the polynomial αk ´ řk´1
+i“0 αi.
+
+Proof. Let the error at the nth iteration be given as en. The error at the nth iteration then satisfies the
+following in the worst case,
+
+en “ L
+
+k
+ź
+
+i“1
+en´i,
+where L is a constant.
+(4.2)
+
+8
+
+The above recurrence can be solved by assuming that the error satisfies the following asymptotic relation
+
+en “ Ceα
+n´1,
+(4.3)
+
+where C is some constant and α is the rate of convergence. From (4.2) and (4.3),
+
+Ceα
+n´1 “ L
+
+k
+ź
+
+i“1
+en´i,
+
+C
+řk´1
+i“0
+1
+αi
+
+L
+“ e
+p´α`řk´1
+i“0
+1
+αi q
+n´1
+.
+
+Since the left hand side is constant for n Ñ 8,
+
+αk ´
+
+k´1
+ÿ
+
+i“0
+αi “ 0.
+
+Now, with all the pieces together we can show that for exact CPD, Algorithm 3.1 locally converges at a
+rate which is given in the following theorem.
+
+Theorem 4.3. Suppose XXX “ rrD; Ap1q, . . . , ApNqss, where each Apiq P RsiˆR with si ě R is full rank and
+has normalized columns. Algorithm 3.1 for computing the exact CP decomposition of XXX converges locally
+with a rate of convergence equal to αN where α is the unique real root of the polynomial xN´1 ´ řN´2
+i“0 xi.
+
+Proof. Consider the computation of the CP decomposition of the tensor XXX with exact rank R and initial
+guess ¯
+Apnq with normalized columns such that ¯
+Apnq “ Apnq ` ∆pnq, with }∆pnq}2 ă ϵ sufficiently small for
+n “ 1, . . . , N ´ 1 (as described in Lemma 4.1). Let the error in CPD at nth iteration be given as
+
+En “ maxt} ¯
+D ´ D}F , } ¯
+Ap1q ´ Ap1q}F , . . . , } ¯
+ApNq ´ ApNq}F u.
+
+Also, let the error in kth subiteration of the nth iteration be given as ϵk. From Lemma 4.1, we know that
+the error in CPD is bounded by the maximum error in factor matrices. Since the error decreases at each
+subiteration, Dn such that En “ Opϵ1q.
+From Lemma 4.1, we know that the error in a subsweep of the algorithm modulo the column scaling is
+of the order of product of errors in previous N ´ 1 subsweeps, therefore the error at pn ` 1qth iteration is
+bounded by the error in the first factor matrix, given by
+
+En`1 “ O
+´ N´2
+ź
+
+k“0
+ϵN´k
+¯
+.
+
+By using Lemma 4.2, we know that the error in a subiteration is given by the following recurrence, where α
+is the positive root of xN´1 ´ řN´2
+i“0 xi,
+
+ϵk`1 “ Opϵα
+kq
+for all k “ 1, . . . , N.
+
+Therefore, the error at pn ` 1qth iteration of Algorithm 3.1 can be expressed as
+
+En`1 “ O
+´ N´1
+ź
+
+i“1
+ϵαi
+1
+¯
+“ OpE
+
+řN´1
+i“1 αi
+n
+q.
+
+Using the fact that α is a root of the polynomial xN´1 ´ řN´2
+i“0 xi, implies that αN´1 ´ řN´2
+i“0 αi “ 0, that
+is, řN´1
+i“1 αi “ αN. Therefore,
+
+En`1 “ O
+´
+EαN
+n
+¯
+.
+
+This completes the proof to show that Algorithm 3.1 locally converges superlinearly for exact CP rank cases.
+We verify our theoretical results in the Section 6.
+
+9
+
+4.1. Convergence to Other Stationary Points. The result in Theorem 4.3 can be generalized to
+the case where a tensor XXX can be represented as the sum of two tensors, TTT and EEE, where TTT has an underlying
+CPD structure of rank R and EEE has a CP decomposition that is mostly orthogonal to the decomposition of TTT .
+For such an input tensor XXX, we show that Algorithm 3.1 with CP rank R, locally converges to the underlying
+CP factors, provided that TTT is associated with a stationary point exists. We analyze the convergence rate
+of the algorithm and show that this is a generalization of the previous result, since we converge to a subset
+of the CP factors with same convergence rate as in Theorem 4.3, if the factors of TTT are in the orthogonal
+complement of the column space of corresponding CP factors of EEE.
+
+Lemma 4.4. For a given tensor XXX, assume there exists a stationary point of Algorithm 3.1, yielding
+positive diagonal matrix D and factors pAp1q, . . . , ApNqq where each Apiq P RsiˆR with si ě R is full rank
+and has normalized columns, i.e., }apiq
+j }2 “ 1 for all i, j, and their pseudoinverse-transposes pU p1q, . . . , U pNqq,
+so Apnq: “ U pnqT . The stationary point conditions imply that @n P t1, . . . , Nu, we have
+
+ApnqD “ Xpnq
+
+ˆ
+N
+ä
+
+m“1,m‰n
+U pmq
+˙
+.
+
+Further, assume that XXX “ rrD; Ap1q, . . . , ApNqss ` rr ˆ
+Ap1q, . . . , ˆ
+ApNqss with } ˆ
+ApnqT U pnq}F ď ϵK. Given approximations ˜
+Apnq “ Apnq ` ∆pnq
+A
+and ˜U pnq “ ˜
+Apnq:T “ U pnq ` ∆pnq
+U
+with normalized columns, then Dϵ ą 0 such
+that if }∆pnq
+A }F , }∆pnq
+U }F ď ϵn ď ϵ for @n P t1, . . . , N ´ 1u, then
+
+˜
+ApNq “ XpNqp ˜U p1q d ¨ ¨ ¨ d ˜U pN´1qq
+
+satisfies } ˜
+ApNq ¯D´1 ´ ApNq} “ OpϵϵK ` ϵ1 . . . ϵN´1q, where ¯D normalizes ˜
+ApNq, i.e., ¯dii “ }˜apNq
+i
+}2. Further,
+} ¯D ´ D}F “ Opϵq.
+
+Proof. We expand the update as follows,
+
+˜
+ApNq “prrAp1q, . . . , ApNqDss ` rr ˆ
+Ap1q, . . . , ˆ
+ApNqssqpNqp ˜U p1q d ¨ ¨ ¨ d ˜U pN´1qq
+
+“ApNqDpAp1qT ˜U p1q ˚ ¨ ¨ ¨ ˚ ApN´1qT ˜U pN´1qq ` ˆ
+ApNqp ˆ
+Ap1qT ˜U p1q ˚ ¨ ¨ ¨ ˚ ˆ
+ApN´1qT ˜U pN´1qq
+
+“ApNqDppI ` Ap1qT ∆p1q
+U q ˚ ¨ ¨ ¨ ˚ pI ` ApN´1qT ∆pN´1q
+U
+qq
+
+` ˆ
+ApNqpp ˆ
+Ap1qT U p1q ` ˆ
+Ap1qT ∆p1q
+U q ˚ ¨ ¨ ¨ ˚ p ˆ
+ApN´1qT U pN´1q ` ˆ
+ApN´1qT ∆pN´1q
+U
+qq.
+
+By the stationary point condition, we have that
+
+ˆ
+ApNqp ˆ
+Ap1qT U p1q ˚ ¨ ¨ ¨ ˚ ˆ
+ApN´1qT U pN´1qq “ 0.
+
+Consequently, the error reduces to the cross terms of the summations, i.e.,1
+
+˜
+ApNq ´ ApNqD “ApNqD
+„
+N˚
+n“1 ApnqT ∆pnq
+U
+` I ˚
+
+N´1
+ÿ
+
+k“1
+
+ˆ
+ÿ
+
+tm1,...,mkuĂt1,...,Nu
+
+k˚
+l“1 ApmlqT ∆pmlq
+U
+
+˙
+
+` ˆ
+ApNq
+„ N´1
+ÿ
+
+k“1
+
+ˆ
+ÿ
+
+tm1,...,mkuĂt1,...,Nu,
+tw1,...,wN´ku“t1,...,Nuztm1,...,mku
+
+k˚
+l“1
+ˆ
+ApmlqT U pmlq N´k
+˚
+l“1
+ˆ
+ApwlqT ∆pwlq
+U
+
+˙
+
+First, since each error term has Frobenius norm Op}∆pnq}q “ Opϵq, the column norms of ˜
+ApNq will yield ¯D
+with } ¯
+D ´ D}F “ Opϵq. Further, in order to get the error bound on ˜
+ApNq, we consider the diagonal matrix,
+
+S “ I ` I ˚
+
+N´1
+ÿ
+
+k“1
+
+ˆ
+ÿ
+
+tm1,...,mkuĂt1,...,Nu
+
+k˚
+l“1 ApmlqT ∆pmlq
+U
+
+˙
+,
+
+1For N “ 3, the right-hand side of this formula is
+
+Ap3qDrAp1qT ∆p1q
+U
+˚ Ap2qT ∆p2q
+U
+` I ˚ pAp1qT ∆p1q
+U
+` Ap2qT ∆p2q
+U qs
+
+` ˆ
+Ap3qr ˆ
+Ap1qT Up1q ˚ ˆ
+Ap2qT ∆p2q
+U
+` ˆ
+Ap2qT Up2q ˚ ˆ
+Ap1qT ∆p1q
+U s.
+
+10
+
+and show that } ¯
+D ´ DS}F “ Opϵ1 . . . ϵN´1 ` ϵϵKq. Since,
+
+˜
+ApNq ´ ApNqDS “ApNqDS
+„
+S´1
+N˚
+n“1 ApnqT ∆pnq
+U
+
+
+
+` ˆ
+ApNq
+„ N´1
+ÿ
+
+k“1
+
+ˆ
+ÿ
+
+tm1,...,mkuĂt1,...,Nu,
+tw1,...,wN´ku“t1,...,Nuztm1,...,mku
+
+k˚
+l“1
+ˆ
+ApmlqT U pmlq N´k
+˚
+l“1
+ˆ
+ApwlqT ∆pwlq
+U
+
+˙
+,
+
+and }S ´ I}F “ Opϵq, we have
+
+} ˜
+ApNq ´ ApNqDS}F “ Opϵ1 . . . ϵN´1 ` ϵϵKq.
+
+The same bound follows for each column, so } ¯
+D ´ DS}F “ Opϵ1 . . . ϵN´1 ` ϵϵKq. Now, using this bound on
+
+˜
+ApNq ¯D´1 “ApNqDS
+„
+S´1
+N˚
+n“1 ApnqT ∆pnq
+U
+` I
+
+¯D´1
+
+` ˆ
+ApNq
+„ N´1
+ÿ
+
+k“1
+
+ˆ
+ÿ
+
+tm1,...,mkuĂt1,...,Nu,
+tw1,...,wN´ku“t1,...,Nuztm1,...,mku
+
+k˚
+l“1
+ˆ
+ApmlqT U pmlq N´k
+˚
+l“1
+ˆ
+ApwlqT ∆pwlq
+U
+¯D´1
+˙
+,
+
+we obtain
+
+} ˜
+ApNq ¯D´1 ´ ApNq}F “
+
+›››››ApNqD
+„
+N˚
+n“1 ApnqT ∆pnq
+U
+
+
+¯D´1
+
+` ˆ
+ApNq
+„ N´1
+ÿ
+
+k“1
+
+ˆ
+ÿ
+
+tm1,...,mkuĂt1,...,Nu,
+tw1,...,wN´ku“t1,...,Nuztm1,...,mku
+
+k˚
+l“1
+ˆ
+ApmlqT U pmlq N´k
+˚
+l“1
+ˆ
+ApwlqT ∆pwlq
+U
+¯D´1
+˙››››
+F
+
+` Opϵ1 . . . ϵN´1 ` ϵϵKq
+
+“ Opϵ1 . . . ϵN´1 ` ϵϵKq.
+
+5. Approximate Decomposition. In the above sections, we have provided a motivation for Algorithm 3.1 to compute a CP decomposition of rank R with R being less than or equal to the smallest mode
+length of the input tensor. We have shown in Theorem 4.3 that this algorithm exhibits a super linear local
+convergence rate for exact CP decomposition problems and achieves a desirable approximation for special
+input tensors as described in Lemma 4.4. We now focus on the case of finding a good CP approximation for
+an arbitrary input tensor. We show that Algorithm 3.1 can be viewed as performing coupled minimization
+of the residual error of the decomposition in terms of a Mahalanobis distance metric [12]. Note that this
+perspective of the algorithm is different from the one introduced in Section 1.2, however it allows us to
+formulate an alternating minimization algorithm which generalizes the Algorithm 3.1 to any CP rank and
+to interpolate between the updates of ALS and Algorithm 3.1.
+
+5.1. Mahalanobis Distance Minimization. Each update of Algorithm 3.1 may be viewed as minimizing a residual error with rescaled components. For an order 3 tensor XXX in updating the first factor, it
+minimizes
+
+}pXXX ´ rrA, B, Cssqp1qpC:T b B:T q}F .
+(5.1)
+
+Since the column span of C d B is the same as that of C:T b B:T , the transformed residual preserves all
+components of the residual error that may be reduced in choosing A with B and C fixed, since the residual
+may be written as
+ApIR d IRqT ´ Xp1qpC:T b B:T q.
+
+We show that this may be viewed as optimizing a single overall objective function relative to each factor,
+while keeping the distance metric associated with that factor independent (and then updating it thereafter).
+This interpretation then enables us to extend Algorithm 3.1 for any CP rank and introduce methods that
+are a hybrid of Algorithm 3.1 and standard ALS.
+
+11
+
+5.1.1. Alternating Mahalanobis Distance Minimization. We consider a variant of Mahalanobis
+distance [18], which computes the distance between vectors x and y as dpx, yq “ px ´ yqT Mpx ´ yq for a
+given symmetric positive definite matrix M. The matrix M is called the ground metric matrix. Ground
+metric generalizes the Euclidean distance to Mahalanobis distance by rotation and scaling of the axes along
+which the distance is computed.
+While, the underlying ground metric may already be known, it may
+also be learned via various metric learning techniques [6, 31]. In optimal transport applications and other
+applications which require computation of distance between probability distributions, a Wasserstein distance
+is considered instead. Wasserstein distance between tensors with a given ground metric has been considered
+for nonnegative CP decomposition [2]. The ground metric in Wasserstein distance may be learned via similar
+metric learning techniques as in Mahalanobis distance [17]. Simultaneous optimization for a ground metric
+and Wasserstein distance between matrices has been used for nonnegative matrix factorization [62].
+We consider minimization of the Mahalanobis distance between tensors with a fixed ground metric which
+maybe updated later. In particular, the objective function minimized for an input tensor XXX P RI1...IN , and
+factors Apiq P RIiˆR is
+
+fpAp1q, ¨ ¨ ¨ , ApNqq “ 1
+
+2vec
+`
+XXX ´ YYY
+˘T Mvec
+`
+XXX ´ YYY
+˘
+,
+(5.2)
+
+where YYY “ rrAp1q, ¨ ¨ ¨ , ApNqss.
+
+We restrict the ground metric matrix M to be Kronecker structured defined as
+
+M “
+
+N
+â
+
+k“1
+M pkq´1.
+
+Each M pkq´1 maybe viewed as a ground metric for each mode of the tensor. This restriction allows us
+to exploit the computational benefits of the structure and enables us to formulate an efficient alternating
+minimization algorithm. We consider the objective in (5.2) for a general (fixed) ground metric for alternating
+optimization, which also allows us to formulate different algorithms for CP decomposition by changing the
+ground metric. We derive an update for the alternating minimization with respect to nth factor matrix,
+given by
+
+Apnq “ min
+Apnq
+1
+2}Xpnq ´ ApnqP pnqT }2
+M,
+(5.3)
+
+where P pnq “
+
+N
+ä
+
+m“1,m‰n
+Apmq.
+
+For succinct writing, let Mpnq “ ÂN
+k“1,k‰n M pkq´1. Since the objective function is quadratic in Apnq, a
+minimizer of (5.3) can be found by obtaining obtaining a gradient Gpnq with respect to the nth factor matrix
+and setting it to 0. The gradient is
+
+Gpnq “ M pnq´1ApnqP pnqT MpnqP pnq ´ M pnq´1XpnqMpnqP pnq.
+
+Setting the gradient above to be 0 and equating M pnqM pnq´1 “ I, we get an update for the nth factor
+given as the solution of the following system,
+
+Apnq´
+P pnqT MpnqP pnq¯
+“ XpnqMpnqP pnq.
+(5.4)
+
+Using the properties of Khatri-Rao products and Kronecker products, the update for the nth factor matrix
+reduces to the system of equations
+
+ApnqZpnq “ XpnqLpnq,
+(5.5)
+
+where Lpnq “
+
+N
+ä
+
+k“1,k‰n
+M pkq´1Apkq,
+
+and Zpnq “
+N˚
+k“1,k‰n ApkqT M pkq´1Apkq.
+
+12
+
+The above update leads to the ALS algorithm if M pkq “ I for all k. We can retrieve Algorithm 3.1 by
+defining
+
+M pkq “ ApkqApkqT ` pI ´ ApkqApkq:q,
+@k P t1, . . . , Nu.
+(5.6)
+
+The matrix I ´ApkqApkq: is inconsequential when applied to the factor matrices. It is included to ensure that
+each M pkq is SPD. Since Algorithm 3.1 can be retrieved from the above update, we refer to Algorithm 3.1
+as AMDM (Alternating Mahalanobis Distance Minimization).
+Let us assume that the iteration involving the above derived alternating updates to each factor as in
+(5.4), converges to a critical point. We can then bound the backward error in application of each matricization
+of the reconstructed tensor YYY “ rrAp1q, ¨ ¨ ¨ , ApNqss, since from (5.4), for each n, we have
+
+Apnq´
+P pnqT MpnqP pnq¯
+´ XpnqMpnqP pnq “ 0,
+´
+Ypnq ´ Xpnq
+¯
+MpnqP pnq “ 0.
+
+Therefore, we have that
+
+}Ypnqz ´ Xpnqz} “ }XpnqzK},
+
+where zK is the projection of z P R
+ś
+
+j“1j‰n Ij onto the orthogonal complement of column span of MpnqP pnq or
+ÄN
+j“1,j‰n M pjqApjq. For ALS, AMDM, and the hybrid methods (introduced in Section 5.3) that interpolate
+between the both, it is sufficent to consider the projection onto the orthogonal complement of column span
+of ÄN
+j“1,j‰n Apjq. This is because for each j, the ground metric matrices are chosen such that the column
+span of Apjq is an invariant subspace of M pjq.
+
+5.1.2. Comparison of AMDM and ALS for approximate rank-2 CPD. We use the formulation
+introduced in the previous subsection to generalize AMDM to the case when CP rank R is greater than
+the mode lengths and to derive hybrid methods that interpolate between AMDM and ALS. The residual
+transformation tends to equalize the weight of contribution to the objective function attributed to components
+of the error associated with different rank-1 parts of the CP decomposition, rrai, bi, ciss without increasing
+the collinearity of columns of the factors. We provide an example as an intuition for this assertion.
+Consider a tensor XXX “ λ1XXX 1 ` λ2XXX 2 ` NNN where XXX 1 and XXX 2 are normalized rank-1 tensors and NNN is
+noise of small magnitude. Assume that λ1 " λ2 and the rank-1 tensors are highly correlated, i.e., the factors
+have collinear columns. Let the current CPD approximation be YYY “ rr¯λ; A, B, Css “ ¯λ1YYY1 ` ¯λ2YYY2. The
+least squares objective minimizes
+
+}XXX ´ YYY}2
+F “ vecpXXX ´ YYYqT vecpXXX ´ YYYq
+
+“ vecpEEE1 ` EEE2 ` NNNqT vecpEEE1 ` EEE2 ` NNNq
+
+“ }EEE1}2
+F ` }EEE2}2
+F ` 2vecpEEE1qT vecpEEE2q ` 2vecpNNNqT pEEE1 ` EEE2 ` NNNq,
+
+where EEE1 “ λ1 ¯XXX 1 ´ ¯λ1YYY1 and EEE2 “ λ2XXX 2 ´ ¯λ2YYY2. Alternating least squares algorithm may reduce }EEE1}F and
+the component of EEE2 in the direction of EEE1, since it leads to reduction of the terms with larger contribution
+in the error. This causes an increase in collinearity of the approximated factors and a more ill-conditioned
+decomposition. On the other hand, the objective in (5.1) can be expressed as
+
+}pXXX ´ YYYq ˆ1 I ˆ2 B:T ˆ3 C:T }2
+F “ vecpXXX ´ YYYqT MvecpXXX ´ YYYq
+
+“ }EEE1}2
+M ` }EEE2}2
+M ` 2vecpEEE1qT MvecpEEE2q ` 2vecpNNNqT MpEEE1 ` EEE2 ` NNNq,
+
+where M “ C:T C: b B:T B: b I. The matrix M rescales the components of the error according to the
+inverse of square of singular values of the factors, since
+
+}EEE1}2
+M “ vecpEEE1qT MvecpEEE1q
+
+“ vecp¯EEE1qT pΣ´2
+C b Σ´2
+B b Iqvecp¯EEE1q,
+
+13
+
+where ¯EEE1 “ EEE1 ˆ1 I ˆ2 UB ˆ3 UC, with UB and UC being the left singular vectors of B and C respectively.
+Thus, the error is rotated by the left singular vectors of B and C, and then rescaled by square of inverse
+of singular values of B and C, i.e., Σ´2
+B , Σ´2
+C . Therefore, if the approximated factors are collinear, the
+contribution in the direction of the singular vectors of B and C with largest singular value is weighed
+proportionally less and similarly the contribution of error in the direction of those with smaller singular
+value is weighed more. This reduces the imbalance in error and leads to a better conditioned decomposition.
+
+5.2. Generalizing AMDM to Any CP Rank. The AMDM algorithm as described in Algorithm 3.1
+imposes a constraint that CP rank should be less than or equal to the smallest mode length of the tensor.
+We now describe how the update in (5.5) with the ground metric as defined in (5.6) leads to the definition
+of AMDM without conditions imposed on the rank. For each M pkq,
+
+M pkq´1 “ Apkq:T Apkq: ` pI ´ ApkqApkq:q.
+
+The linear system for updating the nth factor matrix as in (5.5) can then be simplified to get
+
+ApnqZpnq “ XpnqLpnq,
+
+where Lpnq “
+
+N
+ä
+
+k“1,k‰n
+M pkq´1Apkq “
+
+N
+ä
+
+k“1,k‰n
+Apkq:T ,
+
+and Zpnq “
+N˚
+k“1,k‰n ApkqT M pkq´1Apkq “
+N˚
+k“1,k‰n Apkq:Apkq.
+
+The above update is equivalent to Algorithm 3.1 when CP rank R ď Im, @m P t1, . . . , Nu, since in that case
+Zpnq “ I for all n. For the case when CP rank R is larger than the mode lengths, we get a symmetric semidefinite system of equations. Since the system is semi-definite, a pivoted Cholesky decomposition followed
+by a triangular solve be used for the solution to exist. Alternatively, as in ALS, a regularization term may
+be introduced to make the system positive definite. The cost of forming this system, Zpnq is of the same
+leading order as ALS, i.e., OpIR2q per subsweep, since it requires to obtain a pseudo inverse of the factor
+in pn ´ 1qth iteration, matrix multiplication and Hadamard products of the factors and their previously
+obtained pseudoinverses. The system solve amounts to a computational cost of OpR3q to solve the system.
+
+5.3. Interpolating Between AMDM and ALS. Performing alternating Mahalanobis distance minimization with an identity ground metric is equivalent to performing ALS. To explore methods that interpolate
+between AMDM and ALS, we can interpolate the ground metric between the identity matrix and the one
+associated with AMDM given in (5.6). We can find such ground metrics by decomposing each factor matrix
+into two low rank matrices, such that Apkq “ Apkq
+1
+` Apkq
+2 , where Apkq
+1
+is the best rank-t approximation of
+Apkq. In other words, Apkq
+1
+contains the largest t singular values and the corresponding singular vectors of
+Apkq and Ap2q contains the rest. The ground metric for each mode can then be defined using only the first
+part as
+
+M pkq “ Apkq
+1 ApkqT
+1
+` pI ´ Apkq
+1 Apkq
+1
+:q,
+@k P t1, . . . , Nu.
+(5.7)
+
+By defining a ground metric based on only the first part of the singular value decomposition of the factors
+leads to hybrid methods, since if the first part is all of the singular value decomposition then we get back the
+ground metric in AMDM and if it is none of the same then we get back the identity matrix by convention
+as the orthogonal complement of none is everything.
+Note that for each k,
+
+M pkq´1 “ Apkq:T
+1
+Apkq:
+1
+` pI ´ Apkq
+1 Apkq:
+1
+q.
+
+The update for the nth factor matrix also becomes a combination of AMDM and ALS where the first part
+of the singular value decomposition of factors is treated as in AMDM and the second one as in ALS. More
+
+14
+
+precisely, the system of equations for updating the nth factor matrix is
+
+ApnqZpnq “ XpnqLpnq,
+
+where Lpnq “
+
+N
+ä
+
+k“1,k‰n
+M pkq´1Apkq “
+
+N
+ä
+
+k“1,k‰n
+pApkq:
+1
+` Apkq
+2 q,
+
+and Zpnq “
+N˚
+k“1,k‰n ApkqT M pkq´1Apkq “
+N˚
+k“1,k‰npApkq:
+1
+Apkq
+1
+` ApkqT
+2
+Apkq
+2 q.
+(5.8)
+
+We describe the above derived hybrid algorithm in Algorithm 5.1. The algorithm starts by normalizing
+columns of all the factors and absorbing norms in the first factor as described in Section 3 and then computing
+a reduced SVD of all the factors which costs OpřN
+n“1 InR minpIn, Rqq. At the nth subsweep of the algorithm,
+operations performed are similar in computational cost as that of ALS. Right and left hand sides of the
+system, Ln and Zn require OpInR2q and OpR2 minpIn, Rqq operations respectively. The symmetric semi
+definite system solve requires OpR3q. Computing the right hand side, i.e., performing MTTKRP is the most
+computationally expensive operation with a cost of OpśN
+n“1 InRq for each subsweep. In addition to this, the
+factor matrix obtained after the solve is normalized and a reduced SVD is obtained to update the singular
+value decomposition which costs OpInR minpIn, Rqq. Therefore, the asymptotic computational cost of the
+algorithm is the same as ALS being OpśN
+n“1 InRq.
+
+Algorithm 5.1 General-AMDM: Alternating Mahalanobis Distance Minimization with singular value
+thresholding
+
+1: Input: Tensor XXX P RI1ˆ¨¨¨ˆIN , threshold t, rank R
+2: Initialize tAp1q, . . . , ApNqu so each Apnq P RInˆR is random
+3: for n P t2, . . . , Nu do
+4:
+Apnq “ normalize(Apnqq
+5:
+U pnq “ min pIn, Rq left singular vectors of Apnq
+
+6:
+V pnq “ min pIn, Rq right singular vectors of Apnq
+
+7:
+spnq “ min pIn, Rq singular values of Apnq
+
+8: end for
+9: while Convergence do
+10:
+for n P t1, . . . , Nu do
+11:
+for m P t1, . . . , Nu, m ‰ n do
+
+12:
+spmq
+ps
+“ first t values of spmq inverted and others as it is
+
+13:
+Lm “ U pmqdiagpspmq
+ps qV pmqT
+
+14:
+Zm “ V pmqdiagpspmq
+ps
+˚ spmqqV pmqT
+
+15:
+end for
+16:
+Solve for Apnq in ApnqZpnq “ XpnqLpnq
+as in (5.5)
+17:
+Check Convergence, if converged:
+Break
+18:
+Apnq “ normalizepApnqq
+19:
+Update U pnq “ min pIn, Rq left singular vectors of Apnq
+
+20:
+Update V pnq “ min pIn, Rq right singular vectors of Apnq
+
+21:
+Update spnq “ min pIn, Rq singular values of Apnq
+
+22:
+end for
+23: end while
+24: return factor matrices tAp1q, . . . , ApNqu
+
+6. Numerical Experiments. We perform numerical experiments to demonstrate the convergence
+behaviour of the AMDM algorithm for various tensors which include synthetic examples and tensors arising
+in different applications. We use absolute residual and fitness of the decomposition in Frobenius norm as
+metrics to measure the closeness of the decomposition to the input tensor. For an input tensor XXX, these are
+given as
+
+r “ }XXX ´ YYY}F and f “ 1 ´ }XXX ´ YYY}F
+
+}XXX}F ,
+15
+
+respectively, where YYY “ rrAp1q, ¨ ¨ ¨ , ApNqss is the approximated tensor. For measuring the stability of the
+decomposition or the degree of overlap of CP components, we use the normalized CPD condition number [9]
+to measure the sensitivity or degree of overlap of rank 1 components of the decomposition.
+The normalized CP condition number is given by the reciprocal of the smallest singular value of the
+Terracini’s matrix associated with the CP decomposition. For an equidimensional tensor of order N with
+mode length s and CP rank R, the size of Terracini’s matrix is sN ˆ pNps ´ 1q ` 1qR. For CP rank lower
+than mode lengths of the tensor, this matrix can be compressed to RN ˆ pNpR ´ 1q ` 1qR and the CPD
+condition number can be efficiently computed with a cost of OpRN`4q. The details of computation of the
+condition number are in Appendix A. Our experiments consider two types of synthetic tensors.
+Tensor made by random matrices (Random tensor). We create these tensors based on known uniformly
+distributed randomly-generated factor matrices Apnq P p0, 1qsˆR, XXX “ rrAp1q, . . . , ApNqss.
+Tensor made by collinear random matrices (Collinearity tensor). We use a similar approach as used
+in [1] to generate factor matrices with a fixed value of collinearity, say C. That means that these tensors are
+created with randomly-generated factors Apnq P RsˆR with the following property,
+
+apnqT
+r
+apnq
+z
+“ C,
+
+s.t. }apnq
+r } “ 1, @r ‰ z P t1, ¨ ¨ ¨ , Ru.
+
+We then set λi “ i, @i P t1, ¨ ¨ ¨ , Ru to create a tensor, XXX “ rrλ; Ap1q, . . . , ApNqss.
+We consider four tensors from various real world applications.
+Sleep-EDF tensor:
+This dataset has been used to identify sleeping patterns.
+It comprises of electroencephalogram (EEG), electromyography (EMG) data in the non-rapid eye movement (NREM) stage
+of sleep [28].
+MGH tensor: This dataset consists of data from Massachusetts General Hospital. It includes combinations
+of electroencephalogram (EEG), respiratory signals, and electromyogram signals (EMG). This dataset was
+used to analyze sleep using deep neural networks [8].
+SCF tensor. We consider the density fitting tensor (Cholesky factor of the two-electron integral tensor)
+arising in quantum chemistry. This tensor has been used previously in [50] to compare the efficacy of the
+Gauss-Newton and alternating least squares algorithm. We leverage the PySCF library [53] to generate the
+three dimensional compressed density fitting tensor, representing the compressed restricted Hartree-Fock
+wave function of water molecule chain systems with STO-3G basis set. The number of molecules in the
+system is set to three for this experiment.
+Amino acid tensor. This data set consists of five simple laboratory-made samples. Each sample contains
+different amounts of tyrosine, tryptophan and phenylalanine dissolved in phosphate buffered water. The
+samples were measured by fluorescence [10].
+The experiments are divided broadly into two categories,
+Exact decomposition. We create synthetic tensors with known CP rank R and compare the convergence
+behaviour of the AMDM algorithm with the alternating least squares algorithm for exact CP decomposition.
+Approximate decomposition. We create synthetic tensors with known CP rank and special structure
+such as with added noise or as described in Lemma 4.4. We then approximate these tensors with CP rank R
+which is lower than the underlying decomposition rank. We also consider real world tensors from different
+applications with unknown CP rank.
+
+6.1. Exact CP decomposition. We compare alternating least squares and Algorithm 3.1 for computing exact CP decomposition of synthetic tensors in Figure 1 and 2 and verify our theoretical results. We
+create Collinearity and Random tensors of specified CP rank to analyze the convergence of these algorithms.
+In Figure 1, we create equidimensional synthetic tensors of order N with each mode length s to follow
+sN “ 1003 with fixed CP rank R “ 20. We initialize the factors with uniformly distributed random matrices
+for both the algorithms and plot the absolute residual for each iteration.
+For the Collinearity tensors,
+collinearity value, i.e., C is set to be 0.9. We can observe superlinear convergence of Algorithm 3.1 for both
+the cases, while ALS appears to be slowed down by the ‘swamp’ phenomenon for the Collinearity tensors.
+In Figure 2(a), we plot the empirical rate of convergence of a subiteration by using the relative residual after
+subiterations. Since order 2 is just matrix decomposition, AMDM and ALS algorithm become equivalent
+with a linear convergence rate.
+We can observe that the rate of local convergence for order 3 and 4 is
+consistent with what we observed in Section 4 with an error of 0.2% and 1% for order 3 and 4 respectively.
+
+16
+
+0
+5
+10
+15
+20
+25
+iteration
+
+10
+10
+
+10
+7
+
+10
+4
+
+10
+1
+
+102
+
+105
+
+absolute residual
+
+Random tensors with exact rank R=20
+
+order 3 ALS
+order 4 ALS
+order 5 ALS
+order 3 AMDM
+order 4 AMDM
+order 5 AMDM
+
+(a) Random tensor residual
+
+0
+2
+4
+6
+8
+10
+12
+14
+iteration
+
+10
+12
+
+10
+9
+
+10
+6
+
+10
+3
+
+100
+
+103
+
+absolute residual
+
+Collinearity tensors with collinearity = 0.9 and exact rank R=20
+
+order 3 ALS
+order 4 ALS
+order 5 ALS
+order 3 AMDM
+order 4 AMDM
+order 5 AMDM
+
+(b) Collinearity tensor residual
+
+Figure 1. Superlinear convergence of AMDM algorithm for exact CPD
+
+2
+3
+4
+5
+6
+7
+8
+Order of the tensor
+
+1.0
+
+1.2
+
+1.4
+
+1.6
+
+1.8
+
+2.0
+
+Rate of convergence
+
+Rate of convergence of Mnorm subiteration for exact CPD of Collinearity tensors
+
+theoretical rate of convergence
+observed rate of convergence
+
+(a) Rate of convergence
+
+0
+5
+10
+15
+20
+25
+iteration
+
+10
+10
+
+10
+8
+
+10
+6
+
+10
+4
+
+10
+2
+
+100
+
+102
+
+104
+
+absolute residual
+
+Random tensor with s=100, R=200
+
+ALS
+AMDM
+
+(b) AMDM for rank larger than dimension
+
+Figure 2. Rate of convergence of AMDM subiteration and linear convergence for large rank for exact CPD
+
+For order 5 and above, it is difficult to verify the rate of convergence as there does not exist two data points
+of subiterations where we do not convergence to machine precision and at the same time the assumptions
+for error to be small are satisfied.
+In Figure 2(b), we create a Random equidimensional tensor of with mode length s “ 100 and CP rank
+R “ 200. We can observe that the Algorithm 5.1 converges linearly to the exact solution while taking only
+a few iterations to do so. Since R ą s, we observe a linear convergence rate which is consistent with our
+theoretical results. ALS makes slow progress for this case. A reason for that might again be related to the
+collinearity of the factors, since when R ą s, collinearity is high and ALS is more likely to experience the
+‘swamp’ phenomenon [39].
+
+6.2. Approximate CP decomposition. We plot the probability of convergence to the desired decomposition for synthetic tensors as described in 4.4 with respect to the ϵK to verify our theoretical results in
+Figure 3. We construct these tensors by constructing first R{2 columns of the factors with random matrices
+and then constructing the other half by projecting it onto the orthogonal complement of the column space
+of the first half and adding Gaussian noise of amplitude ϵK to the same. We construct 100 such tensors and
+for each tensor we consider 5 initial guesses which are ϵ away from the desired decomposition as described
+in 4.4. We plot the probability of convergence over these 100 tensors by considering if atleast 1 initial guess
+is within 10´9 of the desired factors. We observe that the probability of convergence to the desired decomposition is 1 when the ϵK is small, irrespective of the size and ϵ, thereby verifying that the first half of CP
+decomposition is a stationary point. The probability decreases as we increase ϵK, i.e., the decomposition
+converges to different stationary points for these tensors.
+
+17
+
+5.0
+4.9
+4.8
+4.7
+4.6
+4.5
+log10
+
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+1.0
+
+Probability
+
+Probability of convergence for tensors w/ s=10, R=10, r=5
+
+= 1
+= 0.01
+
+(a) Probability of convergence for equidimensional tensors with mode length“ 10, exact CP rank“ 10 and approximate rank“ 5
+
+4.50
+4.49
+4.48
+4.47
+4.46
+4.45
+log10
+
+0.0
+
+0.2
+
+0.4
+
+0.6
+
+0.8
+
+1.0
+
+Probability
+
+Probability of convergence for tensors w/ s=100, R=100, r=50
+
+= 1
+= 0.01
+
+(b) Probability of convergence for equidimensional tensors with mode length“ 100, exact CP rank“ 100 and
+approximate rank“ 50
+
+Figure 3. Probability of convergence for 100 tensors with 5 initial guesses in the setting as described in Lemma 4.4
+
+0
+20
+40
+60
+80
+100
+iteration
+
+0.800
+
+0.825
+
+0.850
+
+0.875
+
+0.900
+
+0.925
+
+0.950
+
+0.975
+
+1.000
+
+fitness
+
+Collinearity tensor with Gaussian noise, eps=0.001 w/ s=100 R=10
+
+Hybrid
+ALS
+AMDM
+
+(a) Collinearity tensor with Gaussian noise fitness
+
+0
+20
+40
+60
+80
+100
+iteration
+
+101
+
+102
+
+103
+
+104
+
+condition number
+
+Collinearity tensor with Gaussian noise, eps=0.001 w/ s=100 R=10
+
+ALS
+Hybrid
+AMDM
+
+(b) Collinearity tensor with Gaussian noise condition
+number
+
+Figure 4. Collinearity tensor of size 100 ˆ 100 ˆ 100 with exact CP rank R “ 10 with added Gaussian noise with each
+entry distributed with mean µ “ 0 and standard deviation σ “ 0.001
+
+We compare ALS and different variants of AMDM for computing approximate CP decomposition of synthetic tensors in Figure 4 and application tensors that admit approximations with a low CP rank in Figure 5,
+Figure 6, Figure 7, and Figure 8. We plot the fitness and the condition number of the CP decomposition to
+compare ALS and variants of AMDM. The integer associated with AMDM t “ # corresponds to the number
+of singular values inverted for each factor or best rank´t approximation A1 in Equation (5.7). The hybrid
+algorithm starts by using threshold t “ R in Algorithm 5.1, i.e., starts with Algorithm 3.1 and gradually
+decreases the threshold to 0 to recover ALS algorithm.
+In Figure 4, we compute a rank 10 CP decomposition of the Collinearity tensor with collinearity C “ 0.9
+and exact CP rank R “ 10 with added Gaussian noise tensor. Each entry of the noise tensor is distributed
+normally with mean µ “ 0 and standard deviation σ “ 0.001. We observe that the AMDM algorithm
+maintains a low condition number while reaching a high fitness for both the input tensor and the underlying
+tensor, while ALS algorithm reaches a higher fitness at the cost of highly ill conditioned decomposition. For
+the hybrid algorithm, one less singular value is inverted after every 10 iterations, leading to a decomposition
+with fitness as high as ALS and conditioning as good as the AMDM algorithm.
+We observe a similar
+behaviour for different dimensions and CP rank aproximations of the tensor, suggesting that there maybe
+multiple optimal decompositions for such problems.
+In Figure 5 and Figure 6 , we compute the CP decomposition of the SLEEP-EDF tensor and MGH tensor
+with CP rank R “ 10. We consider several variants of hybrid Algorithm 5.1. For the hybrid algorithm,
+
+18
+
+1
+3
+5
+7
+9
+11
+13
+15
+17
+19
+iteration
+
+0.2
+
+0.3
+
+0.4
+
+0.5
+
+0.6
+
+0.7
+
+0.8
+
+0.9
+
+fitness
+
+SLEEP-EDF tensor
+
+ALS
+Hybrid
+AMDM t=8
+AMDM
+
+(a) SLEEP tensor fitness
+
+1
+3
+5
+7
+9
+11
+13
+15
+17
+19
+iteration
+
+100
+
+101
+
+102
+
+103
+
+104
+
+CPD condition number
+
+SLEEP-EDF tensor
+
+ALS
+AMDM t=8
+Hybrid
+AMDM
+
+(b) SLEEP tensor condition number
+
+Figure 5. SLEEP-EDF tensor of dimensions 2048 ˆ 14 ˆ 129 ˆ 86 approximated with CP rank R “ 10, where t is the
+singular value threshold in Algorithm 5.1.
+
+1
+3
+5
+7
+9
+11
+13
+15
+17
+19
+iteration
+
+0.50
+
+0.55
+
+0.60
+
+0.65
+
+0.70
+
+fitness
+
+MGH tensor
+
+ALS
+Hybrid
+AMDM t=8
+AMDM
+
+(a) MGH tensor fitness
+
+1
+3
+5
+7
+9
+11
+13
+15
+17
+19
+iteration
+
+100
+
+101
+
+102
+
+103
+
+104
+
+105
+
+condition number
+
+MGH tensor
+
+ALS
+Hybrid
+AMDM t=8
+AMDM
+
+(b) MGH tensor condition number
+
+Figure 6. MGH tensor of dimensions 2048 ˆ 12 ˆ 257 ˆ 43 approximated with CP rank R “ 10, where t is the singular
+value threshold in Algorithm 5.1
+
+one less singular value is inverted after every iteration. We clearly see a pattern in both the tensors that if
+lesser singular values are inverted then the fitness is higher and the CPD condition number is larger. We
+also see that the hybrid algorithm is able to achieve a fitness almost as high as ALS while maintaining a
+lower condition number. The condition number of decomposition with the hybrid algorithm is about 3.2x
+lower for the MGH tensor with an absolute difference in fitness being 0.01 or 0.015%, whereas the condition
+number is about 34.6x lower for the SLEEP tensor with an absolute difference fitness 0.0004 with hybrid
+algorithm being more accurate.
+In Figure 7, we compute the CP decomposition of Amino acid tensor with rank R “ 5. We have similar
+observations for the fitness and condition numbers of variants of the AMDM algorithm and ALS. In this
+case, the hybrid algorithm and AMDM with t “ 2 achieve a better fitness than ALS. The maximum fitness
+for hybrid algorithm is 0.982 whereas the maximum fitness for ALS is 0.977. The condition number of ALS
+is about 69 times higher than that of the hybrid algorithm. Note that the fitness for AMDM (all singular
+values inverted) is 0.959 with a condition number equal to 5.56 indicating that the factor matrices have
+almost orthogonal columns.
+In Figure 8, we compute CP decomposition of the SCF tensor with rank R “ 200 (exceeding 2 of the
+3 tensor dimensions). We use a relative tolerance criteria for computing t “ argminip σmax
+
+σi
+ă 100q in the
+AMDM algorithm, i.e., singular values σi are inverted only if
+σmax
+
+σi
+ă 100, where σmax is the maximum
+singular value. The hybrid algorithm outperforms ALS in terms of fitness by reaching 0.993 fitness in 150
+
+19
+
+1
+3
+5
+7
+9
+11
+13
+15
+17
+19
+21
+23
+25
+27
+29
+iteration
+
+0.800
+
+0.825
+
+0.850
+
+0.875
+
+0.900
+
+0.925
+
+0.950
+
+0.975
+
+1.000
+
+fitness
+
+Amino acid tensor
+
+Hybrid
+AMDM t=2
+ALS
+AMDM t=4
+AMDM
+
+(a) Amino acid tensor fitness
+
+1
+3
+5
+7
+9
+11
+13
+15
+17
+19
+21
+23
+25
+27
+29
+iteration
+
+101
+
+102
+
+103
+
+104
+
+105
+
+106
+
+condition number
+
+Amino acid tensor
+
+ALS
+AMDM t=2
+Hybrid
+AMDM t=4
+AMDM
+
+(b) Amino acid tensor condition number
+
+Figure 7. Amino acid tensor of dimensions 5 ˆ 61 ˆ 201 approximated with CP rank R “ 5, where t is the singular value
+threshold in Algorithm 5.1
+
+0
+50
+100
+150
+200
+250
+300
+iteration
+
+0.70
+
+0.75
+
+0.80
+
+0.85
+
+0.90
+
+0.95
+
+1.00
+
+fitness
+
+3 H20 SCF tensor with rank 200
+
+ALS
+
+AMDM t=arg mini(
+max
+
+i
+100)
+
+Figure 8. SCF tensor of size 339 ˆ 21 ˆ 21 approximated with CP rank R “ 200, where t is the singular value threshold
+in Algorithm 5.1.
+
+iterations whereas ALS reaches 0.96 in 300 iterations.
+
+7. Conclusion. In this work, we have proposed an alternative optimization algorithm, AMDM, to
+compute a CP decomposition of the tensor. This algorithm achieves superlinear local convergence for exact
+CP rank problems when CP rank is smaller than or equal to all the mode lengths of the tensor with the
+same asymptotic computational cost as that of ALS. For approximating a tensor via CP decomposition,
+we theoretically show that the algorithm locally converges to the stationary points of (1.4) for tensors
+with special CP structure. Although, the existence of these stationary points for any tensor is an open
+problem, we empirically confirm that the AMDM algorithm converges to these stationary points for various
+tensors. Viewing the algorithm as minimizing a Mahalanobis distance helps in generalization of the method
+for CP rank larger than the mode lengths and interpolate between AMDM and ALS algorithms. We also
+formulate an efficient way to compute the CPD condition number to track the condition of the decomposition
+throughout the algorithm. Our numerical experiments confirm that interpolation of algorithms between
+AMDM and ALS leads to a better conditioned decomposition without significant difference in fitness as
+compared to ALS for synthetic as well as most of the tested real world tensors. We provide an intuitive
+reasoning of this phenomenon and leave the detailed analysis as a future direction of research.
+
+8. Acknowledgments. The authors would like to thank Ardavan (Ari) Afshar for detailed discussions
+about his work on minimizing Wasserstein distance between tensors from which this work is derived. The
+authors would also like to thank Jimeng Sun, Cheng Qian and Chaoqi Yang for having fruitful discussions
+and providing datasets which motivated this work. Navjot Singh and Edgar Solomonik were supported by
+
+20
+
+the US NSF OAC SSI program, award No. 1931258.
+
+Appendix A. Computing the Condition Number of a CP Decomposition.
+It has been shown
+that the CPD condition number is the reciprocal of the smallest singular value of a matrix called Terracini’s
+matrix. This matrix consists of the orthogonal basis for the tangent space of each of the rank-1 components of
+the reconstructed tensor. We will refer to the normalized condition number as the condition number of CPD
+and we refer the reader to [9,60] for details about how a notion of condition number of a CP decomposition
+is defined and derived. Consider an equidimensional order 3 real tensor XXX with mode length s. Let the CPD
+approximation of rank R be given by rrλ; A, B, Css, then the Terracini’s matrix U is U “ rU1 . . . URs, where
+@i P t1, . . . , Ru,
+
+Ui “ rai b bi b ci
+QK
+ai b bi b ci
+ai b QK
+bi b ci
+ai b bi b QK
+cis,
+
+and QK
+ai P Rsˆps´1q is an orthogonal basis of the orthogonal complement of ai, and QK
+bi, and QK
+ci are defined
+similarly. Consequently, the Terrracini’s matrix is of size s3 ˆ Rp3s ´ 2q, and the computational cost of
+computing the smallest singular value via a Krylov subspace method is Ops5R2q. For an order N tensor, this
+cost is OpN 2sN`2R2q and therefore expensive to compute for decompositions with moderately large mode
+lengths.
+The cost of computing the condition number can be decreased significantly for when rank of the CP
+decomposition is lesser than all the mode lengths of the input tensor, i.e., if R ă s. Assume that R ď s, then
+since the condition number is invariant to orthogonal transformations [9], for a CPD of an order 3 tensor,
+
+κ
+`
+rrλ; A, B, Css
+˘
+“ κ
+`
+rrλ; QT
+AA, QT
+BB, QT
+CCss
+˘
+,
+
+where QA P Rsˆs “ rQp1q
+A Qp2q
+A s, and the columns of Qp1q
+A P RsˆR are an orthogonal basis of the column
+space of A, while the columns of Qp2q
+A P Rsˆps´Rq are an orthogonal basis for the orthogonal complement
+of the column space of A. We define QB “ rQp1q
+B Qp2q
+B s and QC “ rQp1q
+C Qp2q
+C s similarly. The transformed
+Terracini’s matrix ¯U “ r ¯
+U1 . . . ¯
+URs, where @i P t1, . . . , Ru,
+
+¯Ui “ rQT
+Aai b QT
+Bbi b QT
+Cci
+loooooooooooooomoooooooooooooon
+
+¯
+U p1q
+i
+
+¯QK
+ai b QT
+Bbi b QT
+Cci
+loooooooooooomoooooooooooon
+
+¯
+U p2q
+i
+
+QT
+Aai b ¯QK
+bi b QT
+Cci
+loooooooooooomoooooooooooon
+
+¯
+U p3q
+i
+
+QT
+Aai b QT
+Bbi b ¯QK
+ci
+loooooooooooomoooooooooooon
+
+¯
+U p4q
+i
+
+s,
+
+where ¯QK
+ai “ QT
+AQK
+ai is an orthogonal basis of the orthogonal complement of QT
+Aai, and ¯QK
+bi, and ¯QK
+ci are
+
+defined similarly. Note that ¯U pjq
+i
+¯U pkq
+i
+“ 0 for j ‰ k, since ¯QKT aiQT
+Aai “ 0. Consequently,
+
+σminpUq “
+min
+jPt1,2,3,4u σminprU pjq
+1
+. . .
+U pjq
+R sq.
+
+After this transformation, we can obtain a reduced form of smaller dimensions each of the four matrices to
+
+compute the condition number more efficiently. Note that, QT
+Aai “
+„
+Qp1q
+A
+T ai
+0
+
+
+and similar for B and C, we
+
+have that
+
+σminprU p1q
+1
+. . .
+U p1q
+R sq “ σminprQp1q
+A
+T a1 b Qp1q
+B
+T b1 b Qp1q
+C
+T c1
+. . .
+Qp1q
+A
+T aR b Qp1q
+B
+T bR b Qp1q
+C
+T cRsq.
+
+The reduced matrix above is of dimension R3 ˆ R instead of s3 ˆ R. Further, we can choose the columns
+
+QK
+ai so that ¯QK
+ai “ QT
+AQK
+ai “
+
+«
+QK
+Qp1q
+A
+T a1
+0
+
+0
+I
+
+ff
+
+, and similar for B and C. Consequently, for j “ 2,
+
+σminprU p2q
+1
+¨ ¨ ¨
+U p2q
+R sq “ σmin
+
+˜« «
+QK
+Qp1q
+A
+T a1
+0
+
+0
+I
+
+ff
+
+b Qp1q
+B
+T b1 b Qp1q
+C
+T c1
+. . .
+
+ff¸
+
+“ mintσminprQK
+Qp1q
+A
+T a1 b Qp1q
+B
+T b1 b Qp1q
+C
+T c1
+. . .sq, σminprQp1q
+B
+T b1 b Qp1q
+C
+T c1
+. . .squ
+
+“ σminprQK
+Qp1q
+A
+T a1 b Qp1q
+B
+T b1 b Qp1q
+C
+T c1
+. . .
+QK
+Qp1q
+A
+T aR b Qp1q
+B
+T bR b Qp1q
+C
+T cRsq,
+
+21
+
+and similar for j “ 3, 4. The dimensions of the above reduced matrix are R3 ˆ RpR ´ 1q, hence a direct
+computation of the singular value decomposition can be used to compute the condition number with cost
+OpR7q.
+All the above arguments can be generalized to an order N non equidimensional tensor. Therefore, we
+showed that the condition number of CPD is invariant to the following transformation
+
+κ
+`
+rrλ; A1 . . . , ANss
+˘
+“ κ
+`
+rrλ; Qp1q
+A1
+T A1, . . . , QpNq
+AN
+T ANss
+˘
+,
+
+where @i P t1, . . . , Nu, columns of Qp1q
+Ai are an orthonormal basis of the column space of Ai.
+
+REFERENCES
+
+[1] E. Acar, D. M. Dunlavy, and T. G. Kolda. A scalable optimization approach for fitting canonical tensor decompositions.
+Journal of Chemometrics, 25(2):67–86, 2011.
+[2] A. Afshar, K. Yin, S. Yan, C. Qian, J. C. Ho, H. Park, and J. Sun. Swift: Scalable wasserstein factorization for sparse
+nonnegative tensors. In Proceedings of the AAAI Conference, 2021.
+[3] G. Ballard, K. Hayashi, and R. Kannan.
+Parallel nonnegative CP decomposition of dense tensors.
+arXiv preprint
+arXiv:1806.07985, 2018.
+[4] G. Ballard, N. Knight, and K. Rouse. Communication lower bounds for matricized tensor times Khatri-Rao product. In
+2018 IEEE International Parallel and Distributed Processing Symposium (IPDPS), pages 557–567. IEEE, 2018.
+[5] C. Battaglino, G. Ballard, and T. G. Kolda. A practical randomized CP tensor decomposition. SIAM Journal on Matrix
+Analysis and Applications, 39(2):876–901, 2018.
+[6] A. Bellet, A. Habrard, and M. Sebban. A survey on metric learning for feature vectors and structured data. arXiv preprint
+arXiv:1306.6709, 2013.
+[7] A. Belouchrani, K. Abed-Meraim, J.-F. Cardoso, and E. Moulines. A blind source separation technique using second-order
+statistics. IEEE Transactions on Signal Processing, 45(2):434–444, 1997.
+[8] S. Biswal, H. Sun, B. Goparaju, M. B. Westover, J. Sun, and M. T. Bianchi. Expert-level sleep scoring with deep neural
+networks. Journal of the American Medical Informatics Association, 25(12):1643–1650, 2018.
+[9] P. Breiding and N. Vannieuwenhoven. The condition number of join decompositions. SIAM Journal on Matrix Analysis
+and Applications, 39(1):287–309, 2018.
+[10] R. Bro. PARAFAC tutorial and applications. Chemometrics and intelligent laboratory systems, 38(2):149–171, 1997.
+[11] J. D. Carroll and J.-J. Chang. Analysis of individual differences in multidimensional scaling via an n-way generalization
+of Eckart-Young decomposition. Psychometrika, 35(3):283–319, 1970.
+[12] M. P. Chandra et al. On the generalised distance in statistics. In Proceedings of the National Institute of Sciences of
+India, volume 2, pages 49–55, 1936.
+[13] J. Choi, X. Liu, S. Smith, and T. Simon. Blocking optimization techniques for sparse tensor computation. In 2018 IEEE
+International Parallel and Distributed Processing Symposium (IPDPS), pages 568–577. IEEE, 2018.
+[14] P. Comon. Tensor diagonalization, a useful tool in signal processing. IFAC Proceedings Volumes, 27(8):77–82, 1994.
+[15] F. Cong, Q.-H. Lin, L.-D. Kuang, X.-F. Gong, P. Astikainen, and T. Ristaniemi. Tensor decomposition of EEG signals:
+A brief review. Journal of neuroscience methods, 248:59–69, 2015.
+[16] C.-F. Cui, Y.-H. Dai, and J. Nie. All real eigenvalues of symmetric tensors.
+SIAM Journal on Matrix Analysis and
+Applications, 35(4):1582–1601, 2014.
+[17] M. Cuturi and D. Avis. Ground metric learning. The Journal of Machine Learning Research, 15(1):533–564, 2014.
+[18] R. De Maesschalck, D. Jouan-Rimbaud, and D. L. Massart. The mahalanobis distance. Chemometrics and intelligent
+laboratory systems, 50(1):1–18, 2000.
+[19] R. A. Harshman. Foundations of the PARAFAC procedure: models and conditions for an explanatory multimodal factor
+analysis. 1970.
+[20] K. Hayashi, G. Ballard, J. Jiang, and M. Tobia. Shared memory parallelization of MTTKRP for dense tensors. arXiv
+preprint arXiv:1708.08976, 2017.
+[21] C. J. Hillar and L.-H. Lim. Most tensor problems are NP-hard. J. ACM, 60(6):45:1–45:39, Nov. 2013.
+[22] F. L. Hitchcock.
+The expression of a tensor or a polyadic as a sum of products.
+Studies in Applied Mathematics,
+6(1-4):164–189, 1927.
+[23] A. Hyv¨arinen. Survey on independent component analysis. 1999.
+[24] L. Karlsson, D. Kressner, and A. Uschmajew.
+Parallel algorithms for tensor completion in the CP format.
+Parallel
+Computing, 57:222–234, 2016.
+[25] O. Kaya. High performance parallel algorithms for tensor decompositions. PhD thesis, 2017.
+[26] O. Kaya and Y. Robert. Computing dense tensor decompositions with optimal dimension trees. Algorithmica, 81(5):2092–
+2121, 2019.
+[27] O. Kaya and B. U¸car. Parallel CP decomposition of sparse tensors using dimension trees. PhD thesis, Inria-Research
+Centre Grenoble–Rhˆone-Alpes, 2016.
+[28] B. Kemp, A. H. Zwinderman, B. Tuk, H. A. Kamphuisen, and J. J. Oberye. Analysis of a sleep-dependent neuronal feedback
+loop: The slow-wave microcontinuity of the EEG. IEEE Transactions on Biomedical Engineering, 47(9):1185–1194,
+2000.
+[29] T. G. Kolda and B. W. Bader. Tensor decompositions and applications. SIAM review, 51(3):455–500, 2009.
+[30] T. G. Kolda and J. R. Mayo. Shifted power method for computing tensor eigenpairs. SIAM Journal on Matrix Analysis
+and Applications, 32(4):1095–1124, 2011.
+
+22
+
+[31] B. Kulis et al. Metric learning: A survey. Foundations and Trends® in Machine Learning, 5(4):287–364, 2013.
+[32] G. Li, L. Qi, and G. Yu. The z-eigenvalues of a symmetric tensor and its application to spectral hypergraph theory.
+Numerical Linear Algebra with Applications, 20(6):1001–1029, 2013.
+[33] J. Li, K. Usevich, and P. Comon. Globally convergent jacobi-type algorithms for simultaneous orthogonal symmetric
+tensor diagonalization. SIAM Journal on Matrix Analysis and Applications, 39(1):1–22, 2018.
+[34] M. Liang and B. Zheng. Further results on moore–penrose inverses of tensors with application to tensor nearness problems.
+Computers & Mathematics with Applications, 77(5):1282–1293, 2019.
+[35] L.-H. Lim. Singular values and eigenvalues of tensors: A variational approach. In Computational Advances in Multi-Sensor
+Adaptive Processing, 2005 1st IEEE International Workshop on, pages 129–132. IEEE, 2005.
+[36] L. Ma and E. Solomonik. Accelerating alternating least squares for tensor decomposition by pairwise perturbation. arXiv
+preprint arXiv:1811.10573, 2018.
+[37] L. Ma and E. Solomonik. Efficient parallel cp decomposition with pairwise perturbation and multi-sweep dimension tree.
+In 2021 IEEE International Parallel and Distributed Processing Symposium (IPDPS), pages 412–421. IEEE, 2021.
+[38] K. Maruhashi, F. Guo, and C. Faloutsos. Multiaspectforensics: Pattern mining on large-scale heterogeneous networks
+with tensor analysis. In 2011 International Conference on Advances in Social Networks Analysis and Mining, pages
+203–210. IEEE, 2011.
+[39] B. C. Mitchell and D. S. Burdick. Slowly converging PARAFAC sequences: swamps and two-factor degeneracies. Journal
+of Chemometrics, 8(2):155–168, 1994.
+[40] D. Mitchell, N. Ye, and H. De Sterck. Nesterov acceleration of alternating least squares for canonical tensor decomposition.
+arXiv preprint arXiv:1810.05846, 2018.
+[41] K. R. Murphy, C. A. Stedmon, D. Graeber, and R. Bro. Fluorescence spectroscopy and multi-way techniques. PARAFAC.
+Analytical Methods, 5(23):6557–6566, 2013.
+[42] D. Nion and L. De Lathauwer. An enhanced line search scheme for complex-valued tensor decompositions. Application
+in DS-CDMA. Signal Processing, 88(3):749–755, 2008.
+[43] P. Paatero. A weighted non-negative least squares algorithm for three-way PARAFAC factor analysis. Chemometrics and
+Intelligent Laboratory Systems, 38(2):223–242, 1997.
+[44] A.-H. Phan, P. Tichavsk`y, and A. Cichocki. Fast alternating LS algorithms for high order CANDECOMP/PARAFAC
+tensor factorizations. IEEE Transactions on Signal Processing, 61(19):4834–4846, 2013.
+[45] A.-H. Phan, P. Tichavsky, and A. Cichocki. Low complexity damped Gauss-Newton algorithms for CANDECOMP/PARAFAC. SIAM Journal on Matrix Analysis and Applications, 34(1):126–147, 2013.
+[46] L. Qi, H. Chen, and Y. Chen. Tensor eigenvalues and their applications, volume 39. Springer, 2018.
+[47] M. Rajih, P. Comon, and R. A. Harshman. Enhanced line search: A novel method to accelerate PARAFAC. SIAM journal
+on matrix analysis and applications, 30(3):1128–1147, 2008.
+[48] M. D. Schatz, T. M. Low, R. A. van de Geijn, and T. G. Kolda. Exploiting symmetry in tensors for high performance:
+Multiplication with symmetric tensors. SIAM Journal on Scientific Computing, 36(5):C453–C479, 2014.
+[49] N. D. Sidiropoulos, L. De Lathauwer, X. Fu, K. Huang, E. E. Papalexakis, and C. Faloutsos. Tensor decomposition for
+signal processing and machine learning. IEEE Transactions on Signal Processing, 65(13):3551–3582.
+[50] N. Singh, L. Ma, H. Yang, and E. Solomonik. Comparison of accuracy and scalability of Gauss–Newton and alternating
+least squares for CANDECOMC/PARAFAC decomposition. SIAM Journal on Scientific Computing, 43(4):C290–
+C311, 2021.
+[51] L. Sorber, M. Van Barel, and L. De Lathauwer. Optimization-based algorithms for tensor decompositions: Canonical
+polyadic decomposition, decomposition in rank-(lr,lr,1) terms, and a new generalization. SIAM Journal on Optimization, 23(2):695–720, 2013.
+[52] L. Sun, B. Zheng, C. Bu, and Y. Wei. Moore–penrose inverse of tensors via einstein product. Linear and Multilinear
+Algebra, 64(4):686–698, 2016.
+[53] Q. Sun, T. C. Berkelbach, N. S. Blunt, G. H. Booth, S. Guo, Z. Li, J. Liu, J. D. McClain, E. R. Sayfutyarova, S. Sharma,
+et al. PySCF: The Python-based simulations of chemistry framework. Wiley Interdisciplinary Reviews: Computational
+Molecular Science, 8(1):e1340, 2018.
+[54] P. Tichavsk`y, A. H. Phan, and A. Cichocki.
+A further improvement of a fast damped Gauss-Newton algorithm for
+CANDECOMP-PARAFAC tensor decomposition. In 2013 IEEE International Conference on Acoustics, Speech and
+Signal Processing, pages 5964–5968. IEEE, 2013.
+[55] P. Tichavsky, A. H. Phan, and A. Cichocki. Non-orthogonal tensor diagonalization, 2016.
+[56] G. Tomasi and R. Bro. PARAFAC and missing values. Chemometrics and Intelligent Laboratory Systems, 75(2):163–180,
+2005.
+[57] G. Tomasi and R. Bro. A comparison of algorithms for fitting the PARAFAC model. Computational Statistics & Data
+Analysis, 50(7):1700–1734, 2006.
+[58] A. Uschmajew. Local convergence of the alternating least squares algorithm for canonical tensor approximation. SIAM
+Journal on Matrix Analysis and Applications, 33(2):639–652, 2012.
+[59] K. Usevich, J. Li, and P. Comon. Approximate matrix and tensor diagonalization by unitary transformations: convergence
+of Jacobi-type algorithms. SIAM Journal on Optimization, 30(4):2998–3028, 2020.
+[60] N. Vannieuwenhoven. Condition numbers for the tensor rank decomposition. Linear Algebra and Its Applications, 535:35–
+86, 2017.
+[61] N. Vannieuwenhoven, K. Meerbergen, and R. Vandebril. Computing the gradient in optimization algorithms for the CP
+decomposition in constant memory through tensor blocking. SIAM Journal on Scientific Computing, 37(3):C415–
+C438, 2015.
+[62] G. Zen, E. Ricci, and N. Sebe. Simultaneous ground metric learning and matrix factorization with earth mover’s distance.
+In 2014 22nd International Conference on Pattern Recognition, pages 3690–3695. IEEE, 2014.
+
+23
+

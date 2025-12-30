@@ -98,7 +98,7 @@ def add_general_arguments(parser):
         default = "random_col",
         metavar='string',
         choices=[
-            'noisy_tensor'
+            'noisy_tensor',
             'random',
             'random_col',
             'mom_cons',
@@ -111,7 +111,7 @@ def add_general_arguments(parser):
             'bert-param',
             'mm',
             'negrandom',
-            'randn'
+            'randn',
             ],
         help='choose tensor to test, available: noisy_tensor, random, negrandom,randn, random_col, mm, mom_cons, mom_cons_sv, amino, coil100, timelapse, scf (default: noisy_tensor)')
     parser.add_argument(
@@ -539,7 +539,7 @@ def add_nls_arguments(parser):
         default="noisy_tensor",
         metavar='string',
         choices=[
-            'noisy_tensor'
+            'noisy_tensor',
             'random',
             'random_col',
             'mom_cons',
@@ -552,7 +552,7 @@ def add_nls_arguments(parser):
             'bert-param',
             'mm',
             'negrandom',
-            'randn'
+            'randn',
             ],
         help='choose tensor to test, available: noisy_tensor, random, negrandom,randn, random_col, mm, mom_cons, mom_cons_sv, amino, coil100, timelapse, scf (default: random)')
     parser.add_argument(

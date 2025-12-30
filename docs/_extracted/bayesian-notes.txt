@@ -1,0 +1,799 @@
+Bayesian Maximum Likelihood Estimation for CP Decomposition
+
+Edgar Solomonik
+
+December 18, 2025
+
+1
+New Model
+
+Let N(µ, M) denote a multidimensional normal distribution with mean µ and covariance matrix
+M. Let [K] = {1, . . . , K} and let ∗denote the Hadamard/pointwise product. For low-rank matrix
+factorization or CP decomposition, the Frobenius norm error metric assumes a Gaussian distribution of the error. In the matrix case, this means that for A ∈Rn×n, we assume that A is obtained
+from some U, V , as
+vec(A) = vec(UV T ) + ϵN(0, I),
+
+then for any ϵ ≥0,
+arg min
+U,V
+∥A −UV T ∥F = arg max
+U,V
+p(U, V |A),
+
+since the most likely U, V is given by the value of A −UV T that is most likely to be taken on by
+ϵN(0, I), i.e.,
+arg max
+U,V
+p(U, V |A) = arg max
+U,V
+p(ϵN(0, I) = A −UV T )
+
+and
+
+p(ϵN(0, I) = A −UV T ) = (2π)−n2
+
+ϵ
+exp{−1
+
+2ϵ2∥A −UV T ∥2
+F }.
+
+Hence, the log of the probability (log likelihood) is proportional to the negation of the Frobenius
+norm error.
+We could instead assume that the distribution of the noise has the same covariance as the signal
+/ quantity of interest. If we assume each column of U and V are samples of some distribution, then
+their sample covariance matrices are 1
+
+RUUT and 1
+
+RV V T . In the matrix case, we could again write
+a corresponding probabilistic model,
+
+vec(A) = vec(UV T ) + ϵN(0, (UUT + (I −UU+)) ⊗(V V T + (I −V V +))),
+
+in which we assume noise outside of the span of U and V is independent (identity covariance).
+
+vec(A) = vec(UV T ) + ϵ/K
+X
+
+i
+Uxi ⊗V yi,
+
+where xi and yi are random vectors whose entries are elementwise independent and normally
+distributed. In this case, finding the most like U and V corresponds to minimizing the Mahalanobis
+distance,
+
+arg max
+U,V
+p(U, V |A) = arg min
+U,V
+∥vec(A −UV T )∥((UUT +(I−UU+))⊗(V V T +(I−V V +)))−1.
+(1)
+
+1
+
+arg max
+U,V
+p(U, V |A) = arg min
+U,V
+∥vec(A −UV T )∥(UUT ⊗V V T )−1.
+(2)
+
+In the matrix case, the truncated SVD results in vec(A −UV T ) ⊥span(U) ⊗Rn and vec(A −
+UV T ) ⊥Rn ⊗span(V ), so it also minimizes Mahalanobis distance in this model. In the tensor
+case, the AMDM algorithm minimizes Mahalanobis distance in an alternating manner and hence,
+if it convergence successfully, it reaches a locally optimal solution to likelihood maximization.
+We now propose a model to justify why the noise term might follow a distribution with the
+same covariance as the sample covariance obtained by considering the columns of the decomposition
+factors. The model assumes that each rank-1 term in the decomposition of T is obtained as a sum
+of identical copies thereof, rescaled and perturbed in a relative way. Specifically, given a tensor
+of order N, T ∈Rn1×...×nN , consider the inverse problem of reconstructing U(1), . . . , U(N) where
+U(i) =
+
+u(i,1)
+. . .
+u(i,R)
+, such that for some R′ > R,
+
+T =
+
+R′
+X
+
+j=1
+αj
+
+N
+O
+
+i=1
+(u(i,rj) + u(i,rj) ∗ϵN(0, I)), where ∀r ∈[R],
+X
+
+j,rj=r
+αj = 1.
+
+TODO 1: Show that to leading order in ϵ for sufficiently large R′ and small αjs, this model is
+equivalent to (2) generalized to the tensor case.
+
+TODO 2: Actually run some experiments applying AMDM to tensors generated based on this
+probabilistic model and see if it gives a better approximation of the Us than ALS.
+
+Additional thoughts (Edgar): the introduction of R′ terms is needed so that the perturbed
+rank-1 terms do not themselves minimize the objective, since they do not increase rank, hence the
+extra terms are needed for averaging. Perhaps there are other / better ways to model this. In
+particular the averaging seems to correspond to a quadrature rule, so perhaps one can instead say
+something like
+
+T =
+
+R
+X
+
+r=1
+Tr,
+Tr = 1
+
+|Ω|
+
+Z
+
+Ω
+
+N
+O
+
+i=1
+(u(i,r) + u(i,r) ∗χ(θ))dθ,
+
+with something like χ(θ) = ϵN(0, I)(θ) (having in mind independent noise for any θ, which is
+unrealistic). Perhaps there ways to think of the noise in terms of a more general inverse problem
+with an integral equation / handle a general class of χ(θ) and possibly also make u or du/dθ
+dependent on θ.
+
+Consider the following perturbation model
+
+T =
+
+R
+X
+
+j=1
+
+N
+O
+
+i=1
+u(i,rj) +
+
+K
+X
+
+k=1
+ϵ/K
+
+N
+O
+
+i=1
+U(i)x(i,k),
+
+where K is something larger than R, U(i) =
+
+u(i,1)
+. . .
+u(i,R)
+and x(i,k) are random vectors whose
+entries are elementwise independent and normally distributed. We can show that for any given U(i),
+the noise will actually follow the effect of covariance given by the kind of empirical covariance of
+U(i), while in the following model the noise follows the true covariance.
+
+1.1
+Notes on Application to Probability Density Basis Coefficient Estimation
+
+Suppose we have a Bayesian model to estimate a probability density of the form,
+
+p(x, y) = ⟨AT ψ(x), Bϕ(y)⟩=
+X
+
+i,j,r
+airbjrψi(x)ϕj(y)
+
+2
+
+where we fix a basis a prior defined by vector valued functions ψ, ϕ : R →RN. Consider the random
+variable, Z = ψ(x)ϕ(y)T where (x, y) ∼p(x, y). Then given m independent samples {(xk, yk)}m
+k=1
+of p(x, y), we have that for
+
+M = 1
+
+m
+
+m
+X
+
+k=1
+ψ(xk)ϕ(yk)T
+
+that
+E[Z] = WψABT Wϕ, where Wf[i, j] =
+Z
+
+z
+fi(z)fj(z)dz.
+
+If we treat the m samples as random variables, E[M] = E[Z] and the variance is M[M] = 1
+
+kM[Z]
+may be used to estimate ABT .
+We could further ask which choice of A and B would yield the probabilistic model (define
+p(x, y)) that is most likely to produce M (to solve the maximum likelihood problem given only
+M). Since M is a sum of iid samples, as m →∞, M converges to a multidimensional Gaussian
+distribution. Hence, we know that as m →∞,
+
+p(M|A, B) ∝e−1
+
+2 xT V −1x, x = vec(M −ABT ), V = 1
+
+m · M(x,y)∼p(x,y)[ψ(x) ⊗ϕ(y)].
+
+However, the covariance of ψ(x) ⊗ϕ(y) in p(x, y) is a bit difficult to characterize. This random
+variable is a tensor product of two random variables, but its covariance matrix also has terms that
+depend on the expectations of the two random variables. Further, the marginal distribution of
+p(x, y) is of the form,
+
+p(x) =
+Z
+
+y
+p(x, y)dy = ⟨u, ψ(x)⟩,
+
+for some vector u. Hence its covariance appears to be defined by rank-1 terms, as apposed to AAT ,
+which we would want for the current form of Mahalanobis distance minimization.
+We could devise new distance functions based on something like the above, or try to consider
+other parameterization of the distribution. I was considering models like
+
+p(x, y) =
+X
+
+i,j,r
+airbjrψir(x)ϕjr(y)
+
+where ψir and ψjs for each i ̸= j have disjoint support (each choice of i index corresponds to a
+segment of x). Though I am not sure that is the best restriction to apply. The marginal distribution
+would then involve all of A and B, but its unclear if the resulting formulations make sense in terms
+of M, etc.
+
+2
+Prior Work
+
+2.1
+Theory of Expectation Maximization
+
+2.2
+Covariance Estimation and Expectation Maximization Applications
+
+Prior works have applied the EM algorithm to estimation of structured covariance matrices. In [1],
+the covariance matrix is parameterized by a vector and EM is used to derive a tractable iterative update, though the update still requires iterative optimization and varies depending on the
+underlying model.
+
+3
+
+3
+Maximum Likelihood Estimation with CP Decomposition
+
+3.1
+Problem Definition: Empirical Bayes Model for CP Decomposition
+
+Given tensor of order N, T ∈Rn1×...×nN , we model T as a sum of R i.i.d. samples from a distribution
+of rank-1 tensors, plus noise,
+
+T = N + 1
+
+R
+
+R
+X
+
+r=1
+
+N
+O
+
+i=1
+u(i,r),
+
+where each u(i,r) is an independent sample of a multivariate normal random variable u(i).
+We
+assume the term N, which may represent noise or less significant information, is also a sum of
+samples of rank-1 tensors from a rescaled distribution with the same covariance but zero mean, i.e.,
+for some k, ϵ,
+
+N = ϵ/k
+
+k
+X
+
+r=1
+
+N
+O
+
+i=1
+˜u(i,r),
+˜u(i,r) ∼u(i) −E[u(i)].
+
+Given T, we seek to recover the most likely samples u(i,r), for i ∈1, . . . N, r ∈1, . . . R, by estimating
+the covariance matrices M[u(i)]. Since the samples composing the noise are independent and zero
+mean,
+
+M[N] = ϵ2/kM
+h N
+O
+
+i=1
+˜u(i,r)i
+= ϵ2/k
+
+N
+O
+
+i=1
+M
+h
+u(i)i
+
+Are we missing a factor of k due to sum of covariances? Also note that T and u(i) do not have
+the same covariance as above if their mean is nonzero. We parameterize M[u(i)] = αI + (βI +
+(1/R)XXT )−1, where the prior distribution of X is
+
+p(X) = C det(Vα(X))−R/2
+R
+Y
+
+i=1
+exp{−1
+
+2β Tr(XT X)},
+
+for some α, β > 0, with appropriate choice of constant C. Then, letting U(i) =
+
+u(i,1)
+· · ·
+u(i,R)
+,
+θ = {U(i)}N
+i=1, and Ψ = {X(i)}N
+i=1, the joint probability density function is
+
+p(θ, Ψ, T) = p(T|θ, Ψ)p(θ|Ψ)p(Ψ).
+
+We seek to perform maximum likelihood estimation on the samples θ, given T, i.e., we seek to
+maximize the marginal likelihood,
+
+L(θ|T) = p(T|θ) =
+Z
+p(T|θ, Ψ)p(Ψ|θ)dΨ.
+
+3.2
+Expectation Maximization Algorithm
+
+FIXME: EM would usually define Q relative to expectation over the distribution p(Ψ|¯θ, T). Note
+that p(Ψ|¯θ, T) ̸= p(Ψ|¯θ), because N is fixed given ¯θ and T, but the probability of Ψ is dependent
+on N if N is distributed in the same fashion.
+At each iteration, given the current estimate of parameters ¯θ the EM algorithm maximizes θ in
+the expectation (over Ψ conditioned on ¯θ) of the log likelihood of Ψ and T, conditioned on θ,
+
+Q(θ, ¯θ) =
+Z
+log(p(Ψ, T|θ))p(Ψ|¯θ, T)dΨ.
+
+4
+
+FIXME desired form is below, standard form is above
+
+ˆQ(θ, ¯θ) =
+Z
+log(p(T|Ψ, θ))p(Ψ|¯θ)dΨ.
+
+Note that, p(T|Ψ, θ) = p(N = T −T(θ)|Ψ) where T(θ) is the tensor constructed from the CP
+factors contained in θ. Then, we have that
+
+log p(T|Ψ, θ) = −1
+
+2 vec(T −T(θ))T KΨ vec(T −T(θ)),
+where
+KΨ =
+
+N
+O
+
+i=1
+K(i)
+X(i),
+
+So we have, with the desired form of Q, that,
+
+Q(θ, ¯θ) = −1
+
+2 vec(T −T(θ))T
+ Z
+KΨp(Ψ|¯θ)dΨ
+
+vec(T −T(θ)) = log p(T|Ep(Ψ|¯θ)[KΨ], θ).
+
+Therefore, the expectation step in the EM algorithm amounts to finding the expected value of KΨ
+given the current parameters ¯θ. Since the samples along each mode of the tensor are independent,
+Ep(Ψ|¯θ)[KΨ] = NN
+i=1 Ep(X(i)|U(i))[K(i)
+X(i)]. Hence, we next proceed to show that, if E[u(i)] = 0, the
+
+regularized form of the inverse of the sample covariance matrix of each X(i), K(i)
+X(i), is the conditional
+expected value of the inverse of the covariance matrix given U(i) and the specified prior distribution
+of X(i). With that, Q(θ, ¯θ) is shown to be the same objective function as that optimized by the
+AMDM algorithm [3].
+
+3.3
+Sample Covariance Matrix from Conditional Expectation
+
+We now derive a parameterization of covariance matrices such that the conditional expectation
+of the regularized inverse of the covariance matrix given the observed samples is the regularized
+inverse of the sample covariance matrix. In the following theorem, we use the shorthand notation,
+
+Vγ(W) = γI +
+1
+#cols(W)WW T .
+
+Note that ∥Vγ(W)−1∥2 ≤1/γ.
+
+Theorem 1. Given a set of R samples a1, . . . , aR of an m-dimensional normal distribution Y with
+E[Y ] = 0, let A =
+
+a1
+· · ·
+aR
+
+, then the covariance matrix Z = M[Y ], satisfies
+
+E[Z−1|A] = αI + Vβ(A)−1,
+
+if the prior distribution for Z is defined by random matrix X ∈Rm×R so Z = Vα(X)−1 and
+p(X) = C det(Vα(X))−R/2 QR
+i=1 exp{−1
+
+2β Tr(XT X)}, for any α, β > 0, with appropriate choice of
+constant C.
+
+Proof. First, note that for any α, β > 0, p(X) is Lebesgue integrable (for constant α, β there exists
+a suitable normalization constant C to make p(X) a valid probability distribution). Using Bayes
+theorem for continuous random variables [2],
+
+E[Z−1|A] = E[Vα(X)|A] =
+Z
+
+Rm×R Vα(X)p(X|A)dX
+
+=
+Z
+
+Rm×R Vα(X)p(A|X)p(X)/p(A)dX,
+
+5
+
+where p(A) is defined based on the prior distribution p(X),
+
+p(A) =
+Z
+
+Rm×R p(A|X)p(X)dX =
+Z
+
+Rm×R p(X)
+
+R
+Y
+
+i=1
+p(ai|X)dX
+
+= (2π)−mR/2
+Z
+
+Rm×R p(X)
+
+R
+Y
+
+i=1
+det(Vα(X))1/2 exp{−1
+
+2aT
+i Vα(X)ai}dX
+
+= (2π)−mR/2
+Z
+
+Rm×R p(X) det(Vα(X))R/2 exp{−1
+
+2 Tr(AT Vα(X)A)}dX
+
+= (2π)−mR/2
+Z
+
+Rm×R exp{−1
+
+2 Tr(AT Vα(X)A)}
+
+R
+Y
+
+i=1
+exp{−1
+
+2βxT
+i xi}dX
+
+= (2π)−mR/2
+Z
+
+Rm×R exp{−1
+
+2 Tr(αAT A + (1/R)AT XXT A + βXT X)}dX
+
+= (2π)−mR/2 exp{Tr(−1
+
+2αAT A)}
+Z
+
+Rm×R exp{−1
+
+2 Tr(XT Vβ(A)X)}dX
+
+= (2π)−mR/2 exp{Tr(−1
+
+2αAT A)}
+ Z
+
+Rm exp{−1
+
+2xT Vβ(A)x}dx
+R
+
+= C exp{Tr(−1
+
+2αAT A)}/ det(Vβ(A))R/2.
+
+Note the analogy between the forms of p(X) and p(A), which motivates the paramterization of Z
+by X. We can similarly relate E[Z−1|A] to the covariance matrix of a Gaussian distribution,
+
+E[Z−1|A] =
+det(Vβ(A))R/2
+
+C exp{Tr(−1
+
+2αAT A)} ·
+Z
+
+Rm×R Vα(X)p(A|X)p(X)dX
+
+= (2π)−mR/2 det(Vβ(A))R/2
+
+C exp{Tr(−1
+
+2αAT A)}
+·
+Z
+
+Rm×R Vα(X)p(X)
+
+R
+Y
+
+i=1
+det(Vα(X))1/2 exp{−1
+
+2aT
+i Vα(X)ai}dX
+
+= (2π)−mR/2 det(Vβ(A))R/2
+
+exp{Tr(−1
+
+2αAT A)}
+·
+Z
+
+Rm×R Vα(X)
+
+R
+Y
+
+i=1
+exp{−1
+
+2βxT
+i xi} exp{−1
+
+2aT
+i Vα(X)ai}dX
+
+= (2π)−mR/2 det(Vβ(A))R/2 ·
+Z
+
+Rm×R Vα(X)
+
+R
+Y
+
+i=1
+exp{−1
+
+2xT
+i Vβ(A)xi}dX
+
+= αI + (2π)−mR/2 det(Vβ(A))R/2 ·
+Z
+
+Rm×R
+
+ 1
+
+R
+
+R
+X
+
+j=1
+xjxT
+j
+
+ R
+Y
+
+i=1
+exp{−1
+
+2xT
+i Vβ(A)xi}dX
+
+= αI + (2π)−m/2 det(Vβ(A))1/2 ·
+Z
+
+Rm xxT exp{−1
+
+2xT Vβ(A)x}dx
+
+= αI + Vβ(A)−1.
+
+The normalization by det(αI + XXT )−R/2 in the prior distribution of X in Theorem 1 is motivated by the proof method, but also has the following intuitive interpretation as an uninformative
+prior. Consider the probability density of the tensor product of the R samples composing A for
+a fixed X, pX(a1 ⊗· · · ⊗aR) = pX(a1) · · · pX(aR).
+For a fixed X, the generalized variance of
+
+6
+
+a1 ⊗· · · ⊗ar is then det(Z)R = det(αI + XXT )−R. Hence, in the theorem, the prior distribution
+probability of the covariance matrices is defined to be proportional to the generalized variance of
+the joint distribution of the R samples, which means that the distribution of log det(Z) is uniform
+on R modulo the regularization term (which is needed to ensure a valid probability distribution).
+The regularization may be avoided altogether by assuming an improper prior distribution for p(X)
+(the uniform ‘distribution’ over Rm×R).
+
+3.4
+Expectation Estimation
+
+Since u(1), . . . , u(N) are independent,
+
+E[
+
+N
+O
+
+i=1
+u(i)] =
+
+N
+Y
+
+i=1
+E[u(i)].
+
+Assuming known covariance matrices, M[u(i)], for i = 1, . . . , N, we also have M[NN
+i=1 u(i)]. Then,
+we have that p(E[u(1)] = η(1), . . . , E[u(N)] = η(N)) is maximized whenever the we have minimized
+the probability of deviation,
+
+p
+
+N + 1
+
+R
+
+R
+X
+
+r=1
+
+N
+O
+
+i=1
+u(i,r) = T −
+
+N
+O
+
+i=1
+η(i)
+
+
+= const · exp
+
+−1
+
+2 vec
+
+T −
+
+N
+O
+
+i=1
+η(i)
+T
+M
+ N
+O
+
+i=1
+u(i)
+−1
+vec
+
+T −
+
+N
+O
+
+i=1
+η(i)
+
+.
+
+The logarithm of the above (log likelihood) implies that finding the best estimation of the expectation of {u(i)}N
+i=1, amounts to solving the Mahalanobis distance rank-1 approximation problem,
+
+min
+η(1),...,η(N)
+
+vec
+
+T −
+
+N
+O
+
+i=1
+η(i)
+
+M[NN
+i=1 u(i)]−1
+.
+
+References
+
+[1] A. Aubry, A. De Maio, S. Marano, and M. Rosamilia. Structured covariance matrix estimation with missing-(complex) data for radar applications via expectation-maximization. IEEE
+Transactions on Signal Processing, 69:5920–5934, 2021.
+
+[2] A. N. Kolmogorov. Foundations of the theory of probability. Chelsea Publishing Company, New
+York, 1950.
+
+[3] N. Singh and E. Solomonik. Alternating Mahalanobis distance minimization for accurate and
+well-conditioned CP decomposition.
+SIAM Journal on Scientific Computing, 45(6):A2781–
+A2812, 2023.
+
+7
+
