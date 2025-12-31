@@ -1,4 +1,4 @@
-from tensor_decomposition.CPD.common_kernels import compute_number_of_variables,  flatten_Tensor, reshape_into_matrices,  get_residual
+from tensor_decomposition.cpd.common_kernels import compute_number_of_variables,  flatten_Tensor, reshape_into_matrices,  get_residual
 import numpy as np
 
 
