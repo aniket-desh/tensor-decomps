@@ -191,8 +191,10 @@ if __name__ == "__main__":
             tenpy, order, size, rank, sp_frac, args.seed
         )
     elif tensor_type == "random_col":
-        [tensor, sparsity_pattern] = synthetic_tensors.collinearity_tensor(
-            tenpy, size, order, rank, args.col, args.seed
+        # collinearity_tensor returns: tensor_true, tensor_noisy, factors_true, 
+        # covs_empirical, cov_pinv_empirical, m_empirical_pinv
+        (tensor, _, _, _, _, _) = synthetic_tensors.collinearity_tensor(
+            tenpy, size, order, rank, args.k, args.epsilon, args.col, args.seed
         )
     elif tensor_type == "amino":
         tensor = real_tensors.amino_acids(tenpy)

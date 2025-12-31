@@ -83,8 +83,11 @@ if __name__ == "__main__":
             tensor.shape[2], tensor.shape[3], tensor.shape[4]
         )
     elif tensor_type == "random_col":
-        [tensor, sparsity_pattern] = synthetic_tensors.collinearity_tensor(
-            tenpy, size, order, rank, args.col, np.random.randint(100)
+        # collinearity_tensor returns: tensor_true, tensor_noisy, factors_true, 
+        # covs_empirical, cov_pinv_empirical, m_empirical_pinv
+        (tensor_true, tensor, factors_true, cov_empirical, 
+         cov_pinv_empirical, m_empirical_pinv) = synthetic_tensors.collinearity_tensor(
+            tenpy, size, order, rank, args.k, args.epsilon, args.col, np.random.randint(100)
         )
     elif tensor_type == "scf":
         tensor = np.load('scf_tensor.npy')
