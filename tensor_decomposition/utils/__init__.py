@@ -1,11 +1,18 @@
 """
 utility module for tensor decomposition.
-provides argument parsing, tensor generation, plotting, and helper functions.
+provides argument parsing, tensor generation, plotting, metrics, and helper functions.
 """
 
 from .generators import generate_initial_guess, generate_tensor
 from .plotting import plot_convergence, plot_comparison_results, lighten_color
 from .utils import save_decomposition_results
+from .metrics import (
+    factor_match_score,
+    aligned_factor_error,
+    congruence_coefficient,
+    relative_factor_error,
+    cosine_similarity,
+)
 from .arg_defs import (
     add_general_arguments,
     add_pp_arguments,
@@ -29,6 +36,12 @@ __all__ = [
     'lighten_color',
     # io
     'save_decomposition_results',
+    # metrics
+    'factor_match_score',
+    'aligned_factor_error',
+    'congruence_coefficient',
+    'relative_factor_error',
+    'cosine_similarity',
     # argument parsing
     'add_general_arguments',
     'add_pp_arguments',

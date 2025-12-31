@@ -5,8 +5,10 @@ provides optimizers for canonical polyadic (cp) tensor decomposition.
 
 from .standard_ALS import CP_DTALS_Optimizer, CP_PPALS_Optimizer
 from .NLS import CP_fastNLS_Optimizer
-from .mahalanobis import CP_AMDM_Optimizer
+from .mahalanobis import CP_AMDM_Optimizer, CP_AMDM_MLE_Optimizer
 from .common_kernels import (
+    cp_reconstruct,
+    mahalanobis_norm,
     get_residual,
     get_residual3,
     get_residual_sp,
@@ -28,6 +30,10 @@ __all__ = [
     'CP_PPALS_Optimizer', 
     'CP_fastNLS_Optimizer',
     'CP_AMDM_Optimizer',
+    'CP_AMDM_MLE_Optimizer',
+    # tensor operations
+    'cp_reconstruct',
+    'mahalanobis_norm',
     # kernels
     'get_residual',
     'get_residual3',

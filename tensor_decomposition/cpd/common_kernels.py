@@ -3,6 +3,66 @@ import numpy.linalg as la
 import sys
 import time
 
+
+def cp_reconstruct(tenpy, factors):
+    """
+    reconstruct a tensor from cp factors for arbitrary tensor order.
+    
+    constructs the tensor T = sum_r (u^(1)_r ⊗ u^(2)_r ⊗ ... ⊗ u^(N)_r)
+    using backend-safe einsum with dynamically generated subscripts.
+    
+    args:
+        tenpy: tensor backend (numpy or ctf)
+        factors: list of N factor matrices, each of shape (n_i, R)
+        
+    returns:
+        reconstructed tensor of shape (n_1, n_2, ..., n_N)
+    """
+    order = len(factors)
+    # build einsum string: 'ar,br,cr,...->abc...'
+    input_subs = ','.join([chr(ord('a') + i) + 'r' for i in range(order)])
+    output_subs = ''.join([chr(ord('a') + i) for i in range(order)])
+    einstr = f"{input_subs}->{output_subs}"
+    return tenpy.einsum(einstr, *factors)
+
+
+def mahalanobis_norm(tenpy, diff, metric_factors):
+    """
+    compute the mahalanobis norm of a tensor difference using kronecker-structured metric.
+    
+    computes ||diff||_{M^{-1}}^2 where M^{-1} = M_1^{-1} ⊗ M_2^{-1} ⊗ ... ⊗ M_N^{-1}
+    using backend-safe einsum with dynamically generated subscripts.
+    
+    for a tensor diff of order N with metric factors [M_1^{-1}, ..., M_N^{-1}],
+    this computes: sum_{i,j,p,q,...} M_1^{-1}_{i,p} * M_2^{-1}_{j,q} * ... * diff_{i,j,...} * diff_{p,q,...}
+    
+    args:
+        tenpy: tensor backend (numpy or ctf)
+        diff: tensor of shape (n_1, n_2, ..., n_N)
+        metric_factors: list of N metric matrices M_k^{-1}, each of shape (n_k, n_k)
+        
+    returns:
+        scalar mahalanobis norm squared
+    """
+    order = diff.ndim
+    assert len(metric_factors) == order, f"expected {order} metric factors, got {len(metric_factors)}"
+    
+    # build einsum string for mahalanobis norm
+    # e.g., for order 3: 'ip,jq,kr,ijk,pqr->'
+    # metric indices: each metric M_k uses indices (mode_k, contracted_k)
+    mode_chars = [chr(ord('a') + i) for i in range(order)]
+    contracted_chars = [chr(ord('a') + order + i) for i in range(order)]
+    
+    # metric factor subscripts: 'ip,jq,kr,...'
+    metric_subs = ','.join([f"{m}{c}" for m, c in zip(mode_chars, contracted_chars)])
+    # diff subscripts: 'ijk,...' and 'pqr,...'
+    diff1_subs = ''.join(mode_chars)
+    diff2_subs = ''.join(contracted_chars)
+    
+    einstr = f"{metric_subs},{diff1_subs},{diff2_subs}->"
+    return tenpy.einsum(einstr, *metric_factors, diff, diff)
+
+
 def compute_lin_sysN(tenpy, A, i, Regu):
     S = None
     for j in range(len(A)):

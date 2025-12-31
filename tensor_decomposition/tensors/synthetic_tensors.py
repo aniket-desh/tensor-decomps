@@ -3,8 +3,45 @@ import sys
 import time
 
 import numpy.linalg as la
-#import error_computation
 from scipy.linalg import svd
+
+from tensor_decomposition.cpd.common_kernels import cp_reconstruct
+
+
+def _generate_noise_tensor(tenpy, factors, k, epsilon):
+    """
+    generate noise tensor from factor structure for arbitrary order.
+    
+    creates noise as: NoiseT = (epsilon/k) * sum_{j=1}^{k} (U_1 @ x_1^j) ⊗ ... ⊗ (U_N @ x_N^j)
+    where x_i^j are random standard normal vectors.
+    
+    args:
+        tenpy: tensor backend (numpy or ctf)
+        factors: list of factor matrices [U_1, ..., U_N], each U_i has shape (n_i, R)
+        k: number of noise samples
+        epsilon: noise scaling factor
+        
+    returns:
+        noise tensor of shape (n_1, n_2, ..., n_N)
+    """
+    order = len(factors)
+    dims = [f.shape[0] for f in factors]
+    R = factors[0].shape[1]
+    
+    NoiseT = tenpy.zeros(dims)
+    
+    # build einsum string for rank-1 outer product: 'i,j,k,...->ijk...'
+    input_subs = ','.join([chr(ord('a') + i) for i in range(order)])
+    output_subs = ''.join([chr(ord('a') + i) for i in range(order)])
+    einstr = f"{input_subs}->{output_subs}"
+    
+    for j in range(k):
+        # generate random vectors and contract with factors
+        noise_vecs = [factors[i] @ np.random.randn(R) for i in range(order)]
+        NoiseT = NoiseT + tenpy.einsum(einstr, *noise_vecs)
+    
+    NoiseT *= (epsilon / k)
+    return NoiseT
 
 
 def generate_cov_with_collinearity(tenpy, n, collinearity_level=0.9, rank=None, seed=1):
@@ -38,64 +75,64 @@ def generate_cov(n, alpha):
         return cov
 ######  old model   
 def generate_tensor_with_noise_old_model(tenpy, dims, R, k, epsilon, alpha, seed=1):
-    #Generate a synthetic tensor T with additive noise based on random normal vectors.
+    """
+    generate a synthetic tensor T with additive noise based on random normal vectors.
+    
+    uses a generative model where factor columns are drawn from multivariate normal
+    distributions with covariances determined by alpha decay parameter.
+    
+    args:
+        tenpy: tensor backend (numpy or ctf)
+        dims: list of tensor dimensions [n_1, n_2, ..., n_N]
+        R: cp rank
+        k: number of noise samples
+        epsilon: noise scaling factor
+        alpha: singular value decay rate for covariance generation
+        seed: random seed for reproducibility
+        
+    returns:
+        tuple of:
+        - tensor_true: clean tensor before noise
+        - tensor_noisy: tensor with added noise
+        - factors_true: list of ground-truth factor matrices U^(k)
+        - covs_empirical: empirical covariance matrices
+        - cov_pinv_empirical: pseudoinverse of empirical covariances  
+        - m_empirical_pinv: metric factors (list of per-mode M^{-1} pieces)
+    """
     tenpy.seed(seed * 1001)
     np.random.seed(seed * 1001)
     
     N = len(dims)
     means = [tenpy.zeros(i) for i in dims]
-    covs = [generate_cov(i, alpha) for i in dims]# Generate covariance matrices for each mode (dimension)
-    #covs = [generate_cov_with_collinearity(tenpy, i, collinearity_level=0.9, rank=None, seed=1) for i in dims]# Generate covariance matrices for each mode (dimension)
-    ###
-    covs_inv = [la.pinv(c) for c in covs]
-    M_true_inv = covs_inv
-    # M_true_inv = covs_inv[0]
-    # for i in range(1, N):
-    #     M_true_inv = np.kron(M_true_inv, covs_inv[i])
-
-    #M_true_inv = np.kron(np.kron(covs_inv[0],covs_inv[1]),covs_inv[2])
-    ###
-    T = tenpy.zeros(dims)
-    U = []
-    U = [np.random.multivariate_normal(means[i], covs[i], R).T for i in range(N)] 
-    T = T + tenpy.einsum('ir,jr,kr->ijk', *U) # Generate tensor T
-    T /= R  
-    ###
-    # Compute empirical covariance matrices for each mode
+    covs = [generate_cov(i, alpha) for i in dims]
+    
+    # generate factor matrices from multivariate normal
+    U = [np.random.multivariate_normal(means[i], covs[i], R).T for i in range(N)]
+    
+    # construct clean tensor using generalized reconstruction
+    T = cp_reconstruct(tenpy, U)
+    T = T / R
+    
+    # compute empirical covariance matrices for each mode
     covs_empirical = [samples @ samples.T for samples in U]
-    #covs_empirical = [C/R for C in covs_empirical]
     sample_pinv = [la.pinv(samples) for samples in U]
     covs_pinv_empirical = [samples_pinv.T @ samples_pinv for samples_pinv in sample_pinv]
-    # M_empirical_pinv = covs_pinv_empirical[0]
-    # for i in range(1, N):
-    #     M_empirical_pinv = np.kron(M_empirical_pinv, covs_pinv_empirical[i])
-
-    #M_empirical_pinv = np.kron(np.kron(covs_pinv_empirical[0],covs_pinv_empirical[1]),covs_pinv_empirical[2])
     M_empirical_pinv = covs_pinv_empirical
-    ###
-    # Generate factor matrices for noise
+    
+    # generate zero-mean noise factors
     U_tilde = []
     for i in range(N):
-       U_i = np.random.multivariate_normal(means[i], covs[i], k).T  # Random normal matrices of size n[i] x k
-       U_i -= U_i.mean(axis=0)  # Subtract mean to get zero-mean distribution
-       U_tilde.append(U_i)
-    # Generate tensor N
-    NoiseT = np.einsum('ir,jr,kr->ijk',*U_tilde)       
-    NoiseT *= (epsilon / k) 
+        U_i = np.random.multivariate_normal(means[i], covs[i], k).T
+        U_i -= U_i.mean(axis=0)  # subtract mean for zero-mean noise
+        U_tilde.append(U_i)
     
-    T_noise = T + NoiseT 
-    ###
-    # svd_results_V = [svd(covs[i]) for i in range(len(dims))]
-    # V_cov = [svd_result[0] for svd_result in svd_results_V]
-    # V_cov_k = [V_cov[i][:,:top_sin_val] for i in range(len(dims))] 
-    # P_V = [V_cov_k[i] @ V_cov_k[i].T for i in range(len(dims))]
-
-    # svd_results_W = [svd(covs_empirical[i]) for i in range(len(dims))]
-    # W_cov_em = [svd_result[0] for svd_result in svd_results_W]
-    # W_cov_em_k = [W_cov_em[i][:,:top_sin_val] for i in range(len(dims))] 
-    # P_W = [W_cov_em_k[i] @ W_cov_em_k[i].T for i in range(len(dims))]
+    # generate noise tensor using generalized reconstruction
+    NoiseT = cp_reconstruct(tenpy, U_tilde)
+    NoiseT *= (epsilon / k)
     
-    return T ,T_noise, covs, covs_inv, covs_empirical,covs_pinv_empirical, M_true_inv, M_empirical_pinv
+    T_noise = T + NoiseT
+    
+    return T, T_noise, U, covs_empirical, covs_pinv_empirical, M_empirical_pinv
     
      #np.save('/home/maryam/Documents/tensor_decomposition-reorg_cleanup/experiments/results/cov0.npy', covs[0])
     #np.save('/home/maryam/Documents/tensor_decomposition-reorg_cleanup/experiments/results/cov1.npy', covs[1])
@@ -105,45 +142,61 @@ def generate_tensor_with_noise_old_model(tenpy, dims, R, k, epsilon, alpha, seed
 #random_vectors = [np.random.randn(R, k) for _ in range(N)]  # Shape: [(R, k), (R, k), (R, k)]
     #NoiseT = tenpy.einsum('ir,jr,kr,iR,jR,kR->ijk', *U, *random_vectors)  # Shape: (dims[0], dims[1], dims[2])
 ####### new model
-def generate_tensor_with_noise_new_model(tenpy, dims, R, k, epsilon, alpha, seed=1): 
+def generate_tensor_with_noise_new_model(tenpy, dims, R, k, epsilon, alpha, seed=1):
+    """
+    generate a synthetic tensor T with additive noise using the new noise model.
+    
+    uses a generative model where factor matrices have controlled singular value
+    decay determined by alpha. noise follows the factor covariance structure.
+    
+    args:
+        tenpy: tensor backend (numpy or ctf)
+        dims: list of tensor dimensions [n_1, n_2, ..., n_N]
+        R: cp rank
+        k: number of noise samples
+        epsilon: noise scaling factor
+        alpha: singular value decay rate
+        seed: random seed for reproducibility
+        
+    returns:
+        tuple of:
+        - tensor_true: clean tensor before noise
+        - tensor_noisy: tensor with added noise
+        - factors_true: list of ground-truth factor matrices U^(k)
+        - covs_empirical: empirical covariance matrices
+        - cov_pinv_empirical: pseudoinverse of empirical covariances  
+        - m_empirical_pinv: metric factors (list of per-mode M^{-1} pieces)
+    """
+    tenpy.seed(seed * 1001)
+    np.random.seed(seed * 1001)
+    
     N = len(dims)
     U = []
+    
+    # generate factor matrices with controlled singular value decay
     for i in range(N):
-        s = alpha**(-np.linspace(0,R,R))
-        A1 = np.random.random((dims[i],R))
-        A2 = np.random.random((R,R))
-
-        Q1, RR1 = la.qr(A1)
-        Q2, RR2 = la.qr(A2)
+        s = alpha ** (-np.linspace(0, R, R))
+        A1 = np.random.random((dims[i], R))
+        A2 = np.random.random((R, R))
+        Q1, _ = la.qr(A1)
+        Q2, _ = la.qr(A2)
         U.append(Q1 @ np.diag(s) @ Q2)
-        #U.append(np.random.randn(dims[i], R))  # Random normal matrices of size n[i] x R
-    # Generate tensor T
-    T = np.einsum('ir,jr,kr->ijk',U[0],U[1],U[2],optimize=True)  
-    T /= R 
-    ####
-    # Compute empirical covariance matrices for each mode
+    
+    # construct clean tensor using generalized reconstruction
+    T = cp_reconstruct(tenpy, U)
+    T = T / R
+    
+    # compute empirical covariance matrices for each mode
     covs_empirical = [samples @ samples.T for samples in U]
-    #covs_empirical = [C/R for C in covs_empirical]
     sample_pinv = [la.pinv(samples) for samples in U]
     covs_pinv_empirical = [samples_pinv.T @ samples_pinv for samples_pinv in sample_pinv]
-    # M_empirical_pinv = np.kron(np.kron(covs_pinv_empirical[0],covs_pinv_empirical[1]),covs_pinv_empirical[2])
-    # ###
     M_empirical_pinv = covs_pinv_empirical
-    # Generate factor matrices for noise
-    NoiseT = tenpy.zeros(dims)
-    for j in range(k):
-        Ux_i = [U[i] @ np.random.randn(R) for i in range(N)] 
-        NoiseT += tenpy.einsum('i,j,k->ijk',*Ux_i) 
-    NoiseT *= (epsilon / k) 
-    T_noise = T + NoiseT
-    ###
-
-    # svd_results_W = [svd(covs_empirical[i]) for i in range(len(dims))]
-    # W_cov_em = [svd_result[0] for svd_result in svd_results_W]
-    # W_cov_em_k = [W_cov_em[i][:,:top_sin_val] for i in range(len(dims))] 
-    # P_W = [W_cov_em_k[i] @ W_cov_em_k[i].T for i in range(len(dims))]
     
-    return T ,T_noise, covs_empirical, covs_pinv_empirical, M_empirical_pinv
+    # generate noise tensor using the helper function
+    NoiseT = _generate_noise_tensor(tenpy, U, k, epsilon)
+    T_noise = T + NoiseT
+    
+    return T, T_noise, U, covs_empirical, covs_pinv_empirical, M_empirical_pinv
     
     
     
@@ -368,24 +421,50 @@ def collinearity(v1, v2, tenpy):
 def collinearity_tensor(tenpy, s, order, R, k, epsilon,
                              col=[0.2, 0.8],
                              seed=1):
-
-    assert(col[0] >= 0. and col[1] <= 1.)
-    assert(s >= R)
+    """
+    generate a tensor with controlled collinearity in the factor matrices.
+    
+    creates factor matrices with column correlations bounded by col range,
+    then generates the corresponding cp tensor with additive noise.
+    
+    args:
+        tenpy: tensor backend (numpy or ctf)
+        s: size of each dimension
+        order: tensor order (number of modes)
+        R: cp rank
+        k: number of noise samples
+        epsilon: noise scaling factor
+        col: [min, max] collinearity range for factor columns
+        seed: random seed for reproducibility
+        
+    returns:
+        tuple of:
+        - tensor_true: clean tensor before noise
+        - tensor_noisy: tensor with added noise
+        - factors_true: list of ground-truth factor matrices
+        - covs_empirical: empirical covariance matrices
+        - cov_pinv_empirical: pseudoinverse of empirical covariances  
+        - m_empirical_pinv: metric factors (list of per-mode M^{-1} pieces)
+    """
+    assert col[0] >= 0. and col[1] <= 1.
+    assert s >= R
     tenpy.seed(seed * 1001)
-    dims = [s, s, s]
+    np.random.seed(seed * 1001)
+    
+    dims = [s] * order
     A = []
+    
     for i in range(order):
-        #Gamma_L = tenpy.random((s, R))
-        Gamma_L = np.random.randn(s,R)
+        Gamma_L = np.random.randn(s, R)
         Gamma = tenpy.dot(tenpy.transpose(Gamma_L), Gamma_L)
         Gamma_min, Gamma_max = Gamma.min(), Gamma.max()
         Gamma = (Gamma - Gamma_min) / (Gamma_max - Gamma_min) * \
             (col[1] - col[0]) + col[0]
         tenpy.fill_diagonal(Gamma, 1.)
         A_iT = tenpy.cholesky(Gamma)
+        
         # change size from [R,R] to [s,R]
-        #mat = tenpy.random((s, s))
-        mat = np.random.randn(s,s)
+        mat = np.random.randn(s, s)
         [U_mat, sigma_mat, VT_mat] = tenpy.svd(mat)
         A_iT = tenpy.dot(A_iT, VT_mat[:R, :])
 
@@ -393,38 +472,20 @@ def collinearity_tensor(tenpy, s, order, R, k, epsilon,
         col_matrix = tenpy.dot(tenpy.transpose(A[i]), A[i])
         col_matrix_min, col_matrix_max = col_matrix.min(), (col_matrix - \
                                                         tenpy.eye(R, R)).max()
-        assert(
-            col_matrix_min -
-            col[0] >= -
-            0.01 and col_matrix_max <= col[1] +
-            0.01)
+        assert col_matrix_min - col[0] >= -0.01 and col_matrix_max <= col[1] + 0.01
 
-    T = tenpy.ones([s] * order)
-    T = tenpy.TTTP(T, A)
-    O = None
-    # Compute empirical covariance matrices for each mode
+    # construct clean tensor using generalized reconstruction
+    T = cp_reconstruct(tenpy, A)
+    
+    # compute empirical covariance matrices for each mode
     covs_empirical = [samples @ samples.T for samples in A]
-    #covs_empirical = [C/R for C in covs_empirical]
     sample_pinv = [la.pinv(samples) for samples in A]
     covs_pinv_empirical = [samples_pinv.T @ samples_pinv for samples_pinv in sample_pinv]
-    # M_empirical_pinv = np.kron(np.kron(covs_pinv_empirical[0],covs_pinv_empirical[1]),covs_pinv_empirical[2])
-    # ###
     M_empirical_pinv = covs_pinv_empirical
-    # Generate factor matrices for noise
-    NoiseT = tenpy.zeros(dims)
-    for j in range(k):
-        Ax_i = [A[i] @ np.random.randn(R) for i in range(order)] #Gaussian distribution
-        #Ax_i = [A[i] @ np.random.exponential(scale=1.0, size=R) for i in range(order)] #exponential distribution
-        #Ax_i = [A[i] @ np.random.beta(a=2.0, b=5.0, size=R) for i in range(order)] #beat disribution
-        NoiseT += tenpy.einsum('i,j,k->ijk',*Ax_i) 
-    NoiseT *= (epsilon / k) 
-    T_noise = T + NoiseT
-    ###
-
-    # svd_results_W = [svd(covs_empirical[i]) for i in range(len(dims))]
-    # W_cov_em = [svd_result[0] for svd_result in svd_results_W]
-    # W_cov_em_k = [W_cov_em[i][:,:top_sin_val] for i in range(len(dims))] 
-    # P_W = [W_cov_em_k[i] @ W_cov_em_k[i].T for i in range(len(dims))]
     
-    return T , O,  T_noise, covs_empirical, covs_pinv_empirical, M_empirical_pinv
+    # generate noise tensor using the helper function
+    NoiseT = _generate_noise_tensor(tenpy, A, k, epsilon)
+    T_noise = T + NoiseT
+
+    return T, T_noise, A, covs_empirical, covs_pinv_empirical, M_empirical_pinv
     

@@ -41,10 +41,13 @@ from .CPD import (
     CP_PPALS_Optimizer,
     CP_fastNLS_Optimizer,
     CP_AMDM_Optimizer,
+    CP_AMDM_MLE_Optimizer,
 )
 
 # cp decomposition kernels
 from .CPD import (
+    cp_reconstruct,
+    mahalanobis_norm,
     get_residual,
     get_residual3,
     get_residual_sp,
@@ -61,6 +64,14 @@ from .utils import (
     save_decomposition_results,
     plot_convergence,
     plot_comparison_results,
+)
+
+# metrics for factor recovery evaluation
+from .utils import (
+    factor_match_score,
+    aligned_factor_error,
+    congruence_coefficient,
+    relative_factor_error,
 )
 
 # argument parsing utilities
@@ -91,9 +102,13 @@ __all__ = [
     'CP_PPALS_Optimizer',
     'CP_fastNLS_Optimizer',
     'CP_AMDM_Optimizer',
+    'CP_AMDM_MLE_Optimizer',
     # base classes
     'DTALS_base',
     'PPALS_base',
+    # tensor operations
+    'cp_reconstruct',
+    'mahalanobis_norm',
     # kernels
     'get_residual',
     'get_residual3',
@@ -105,6 +120,11 @@ __all__ = [
     'save_decomposition_results',
     'plot_convergence',
     'plot_comparison_results',
+    # metrics
+    'factor_match_score',
+    'aligned_factor_error',
+    'congruence_coefficient',
+    'relative_factor_error',
     # argument parsing
     'add_general_arguments',
     'add_nls_arguments',

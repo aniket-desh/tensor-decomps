@@ -49,42 +49,63 @@ def generate_tensor(tenpy, args):
         args: argument namespace with tensor parameters
         
     returns:
-        tuple of (tensor_true, tensor, sparsity_pattern, cov_empirical,
-                  cov_pinv_empirical, m_empirical_pinv)
+        dict with keys:
+        - tensor_true: ground-truth clean tensor
+        - tensor_noisy: tensor with noise (same as tensor_true if no noise model)
+        - factors_true: list of ground-truth factor matrices U^(k) (None if not available)
+        - cov_empirical: empirical covariance matrices (None if not available)
+        - cov_pinv_empirical: pseudoinverse of empirical covariances (None if not available)  
+        - m_empirical_pinv: metric factors for mahalanobis norm (None if not available)
+        - sparsity_pattern: sparsity pattern if applicable (None otherwise)
     """
     # import here to avoid circular imports
     from tensor_decomposition.tensors import synthetic_tensors, real_tensors
     
-    tensor_true = None
-    tensor = None
-    sparsity_pattern = None
-    cov_empirical = None
-    cov_pinv_empirical = None
-    m_empirical_pinv = None
+    # initialize result dict with None defaults
+    result = {
+        'tensor_true': None,
+        'tensor_noisy': None,
+        'factors_true': None,
+        'cov_empirical': None,
+        'cov_pinv_empirical': None,
+        'm_empirical_pinv': None,
+        'sparsity_pattern': None,
+    }
     
     if args.load_tensor != '':
         tensor = tenpy.load_tensor_from_file(args.load_tensor + 'tensor.npy')
-        tensor_true = tensor
+        result['tensor_true'] = tensor
+        result['tensor_noisy'] = tensor
         
     elif args.tensor == "random":
         tenpy.printf("[info] generating random tensor")
         [tensor, sparsity_pattern] = synthetic_tensors.rand(
             tenpy, args.order, args.s, args.R, args.sp_fraction, args.seed
         )
-        tensor_true = tensor
+        result['tensor_true'] = tensor
+        result['tensor_noisy'] = tensor
+        result['sparsity_pattern'] = sparsity_pattern
         
     elif args.tensor == "noisy_tensor":
         dims = [args.s] * args.order
         if getattr(args, 'type_noisy_tensor', 'new_model') == "new_model":
-            (tensor_true, tensor, cov_empirical, cov_pinv_empirical,
-             m_empirical_pinv) = synthetic_tensors.generate_tensor_with_noise_new_model(
-                tenpy, dims, args.R, args.k, args.epsilon, args.alpha, args.seed
-            )
+            (tensor_true, tensor_noisy, factors_true, cov_empirical, 
+             cov_pinv_empirical, m_empirical_pinv) = \
+                synthetic_tensors.generate_tensor_with_noise_new_model(
+                    tenpy, dims, args.R, args.k, args.epsilon, args.alpha, args.seed
+                )
         else:
-            (tensor_true, tensor, cov_empirical, cov_pinv_empirical, _, _,
-             m_empirical_pinv, _) = synthetic_tensors.generate_tensor_with_noise_old_model(
-                tenpy, dims, args.R, args.k, args.epsilon, args.alpha, args.seed
-            )
+            (tensor_true, tensor_noisy, factors_true, cov_empirical, 
+             cov_pinv_empirical, m_empirical_pinv) = \
+                synthetic_tensors.generate_tensor_with_noise_old_model(
+                    tenpy, dims, args.R, args.k, args.epsilon, args.alpha, args.seed
+                )
+        result['tensor_true'] = tensor_true
+        result['tensor_noisy'] = tensor_noisy
+        result['factors_true'] = factors_true
+        result['cov_empirical'] = cov_empirical
+        result['cov_pinv_empirical'] = cov_pinv_empirical
+        result['m_empirical_pinv'] = m_empirical_pinv
             
     elif args.tensor == "MGH":
         tensor = tenpy.load_tensor_from_file("MGH-16.npy")
@@ -92,7 +113,8 @@ def generate_tensor(tenpy, args):
             tensor.shape[0] * tensor.shape[1],
             tensor.shape[2], tensor.shape[3], tensor.shape[4]
         )
-        tensor_true = tensor
+        result['tensor_true'] = tensor
+        result['tensor_noisy'] = tensor
         
     elif args.tensor == "SLEEP":
         tensor = tenpy.load_tensor_from_file("SLEEP-16.npy")
@@ -100,45 +122,51 @@ def generate_tensor(tenpy, args):
             tensor.shape[0] * tensor.shape[1],
             tensor.shape[2], tensor.shape[3], tensor.shape[4]
         )
-        tensor_true = tensor
+        result['tensor_true'] = tensor
+        result['tensor_noisy'] = tensor
         
     elif args.tensor == "random_col":
-        dims = [args.s] * args.order
-        result = synthetic_tensors.collinearity_tensor(
+        (tensor_true, tensor_noisy, factors_true, cov_empirical,
+         cov_pinv_empirical, m_empirical_pinv) = synthetic_tensors.collinearity_tensor(
             tenpy, args.s, args.order, args.R, args.k, args.epsilon, args.col, args.seed
         )
-        if len(result) == 6:
-            (tensor_true, sparsity_pattern, tensor, cov_empirical,
-             cov_pinv_empirical, m_empirical_pinv) = result
-        else:
-            # fallback for different signature
-            tensor, sparsity_pattern = result[0], result[1]
-            tensor_true = tensor
+        result['tensor_true'] = tensor_true
+        result['tensor_noisy'] = tensor_noisy
+        result['factors_true'] = factors_true
+        result['cov_empirical'] = cov_empirical
+        result['cov_pinv_empirical'] = cov_pinv_empirical
+        result['m_empirical_pinv'] = m_empirical_pinv
         
     elif args.tensor == "scf":
         tensor = real_tensors.get_scf_tensor(tenpy)
-        tensor_true = tensor
+        result['tensor_true'] = tensor
+        result['tensor_noisy'] = tensor
         
     elif args.tensor == "amino":
         tensor = real_tensors.amino_acids(tenpy)
-        tensor_true = tensor
+        result['tensor_true'] = tensor
+        result['tensor_noisy'] = tensor
         
     elif args.tensor == "negrandom":
         tenpy.printf("[info] generating random tensor with negative entries")
         [tensor, sparsity_pattern] = synthetic_tensors.neg_rand(
             tenpy, args.order, args.s, args.R, args.sp_fraction, args.seed
         )
-        tensor_true = tensor
+        result['tensor_true'] = tensor
+        result['tensor_noisy'] = tensor
+        result['sparsity_pattern'] = sparsity_pattern
         
     elif args.tensor == "randn":
         tenpy.printf("[info] generating random tensor with normal entries")
         [tensor, sparsity_pattern] = synthetic_tensors.randn(
             tenpy, args.order, args.s, args.R, args.sp_fraction, args.seed
         )
-        tensor_true = tensor
+        result['tensor_true'] = tensor
+        result['tensor_noisy'] = tensor
+        result['sparsity_pattern'] = sparsity_pattern
 
-    if tensor is not None:
-        tenpy.printf(f"[info] input tensor shape: {tensor.shape}")
+    if result['tensor_noisy'] is not None:
+        tenpy.printf(f"[info] input tensor shape: {result['tensor_noisy'].shape}")
     
-    return tensor_true, tensor, sparsity_pattern, cov_empirical, cov_pinv_empirical, m_empirical_pinv
+    return result
 

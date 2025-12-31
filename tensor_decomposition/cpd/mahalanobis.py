@@ -1,10 +1,152 @@
 import numpy as np
 import numpy.linalg as la
-from .common_kernels import solve_sys, compute_lin_sysN, normalise
+from .common_kernels import solve_sys, compute_lin_sysN, normalise, cp_reconstruct, mahalanobis_norm
 try:
     import Queue as queue
 except ImportError:
     import queue
+
+
+class CP_AMDM_MLE_Optimizer():
+    """
+    model-matched amdm optimizer for cp decomposition with known covariance structure.
+    
+    unlike the standard CP_AMDM_Optimizer which estimates the metric from the current
+    factors, this optimizer uses the pre-computed metric factors (M^{-1} = M_1^{-1} ⊗ ... ⊗ M_N^{-1})
+    from the noise model to perform true mahalanobis-weighted least squares.
+    
+    this is the correct optimizer for experiment a (mle story) where:
+    - we know the noise covariance structure from the generative model
+    - we want to minimize ||T - T_hat||_{M^{-1}}^2 where M factors across modes
+    
+    the update for mode k is:
+        A_k = (M_k^{-1/2} @ T_(k) @ (M_{-k}^{-1/2} @ A_{-k})^+)^T @ M_k^{-1/2}
+    
+    which reduces to solving weighted normal equations with the known metric.
+    
+    args:
+        tenpy: tensor backend (numpy or ctf)
+        T: input tensor to decompose
+        A: initial factor matrices
+        metric_factors: list of per-mode metric matrices M_k^{-1} from generator
+        args: argument namespace with optimization parameters
+    """
+    
+    def __init__(self, tenpy, T, A, metric_factors, args):
+        self.tenpy = tenpy
+        self.T = T
+        self.A = A
+        self.R = A[0].shape[1]
+        self.order = len(A)
+        self.sp = getattr(args, 'sp', 0)
+        self.metric_factors = metric_factors  # list of M_k^{-1} matrices
+        
+        # precompute sqrt of metric factors for weighted operations
+        # M_k^{-1} = (M_k^{-1/2})^T @ M_k^{-1/2}
+        self.metric_sqrt = []
+        for M_inv in metric_factors:
+            # compute matrix square root via eigendecomposition
+            eigvals, eigvecs = la.eigh(M_inv)
+            # clip small/negative eigenvalues for numerical stability
+            eigvals = np.maximum(eigvals, 1e-12)
+            M_inv_sqrt = eigvecs @ np.diag(np.sqrt(eigvals)) @ eigvecs.T
+            self.metric_sqrt.append(M_inv_sqrt)
+    
+    def _build_mttkrp_einstr(self, mode):
+        """build einsum string for weighted mttkrp at given mode."""
+        # T indices: 'abc...'
+        # output: mode_char + 'r'
+        T_inds = ''.join([chr(ord('a') + i) for i in range(self.order)])
+        out_inds = chr(ord('a') + mode) + 'r'
+        
+        # build contraction: metric_mode @ T contracted with weighted factors
+        # for each mode != current: factor_mode @ metric_mode
+        parts = []
+        for i in range(self.order):
+            if i != mode:
+                parts.append(chr(ord('a') + i) + 'r')
+        
+        einstr = ','.join(parts) + ',' + T_inds + '->' + out_inds
+        return einstr
+    
+    def step(self, Regu):
+        """
+        perform one sweep of weighted als updates using the known metric.
+        
+        for each mode k, solves the weighted normal equations:
+            (sum_r weighted_khatri_rao) @ A_k^T = weighted_mttkrp
+        
+        args:
+            Regu: regularization parameter
+            
+        returns:
+            updated factor matrices
+        """
+        for mode in range(self.order):
+            # compute weighted factors for all other modes
+            # weighted_A[i] = M_i^{-1/2} @ A[i]
+            weighted_A = []
+            for i in range(self.order):
+                if i != mode:
+                    weighted_A.append(self.metric_sqrt[i] @ self.A[i])
+            
+            # compute weighted mttkrp
+            # first apply metric sqrt to tensor along mode
+            # then contract with weighted factors
+            
+            # build einsum for weighted mttkrp
+            T_inds = ''.join([chr(ord('a') + i) for i in range(self.order)])
+            mode_char = chr(ord('a') + mode)
+            
+            # weighted tensor: apply M_mode^{-1/2} along mode
+            # for simplicity, we work with the full weighted normal equations
+            
+            # compute gramians of weighted factors
+            gramians = []
+            for wA in weighted_A:
+                gramians.append(wA.T @ wA)
+            
+            # hadamard product of gramians
+            S = gramians[0].copy()
+            for g in gramians[1:]:
+                S = S * g
+            S = S + Regu * np.eye(self.R)
+            
+            # compute rhs: M_mode^{-1/2} @ MTTKRP with weighted factors
+            # MTTKRP: T contracted with weighted_A on all modes except mode
+            
+            # create factor list for MTTKRP (weighted factors + placeholder)
+            mttkrp_factors = []
+            for i in range(self.order):
+                if i == mode:
+                    mttkrp_factors.append(np.zeros((self.A[mode].shape[0], self.R)))
+                else:
+                    # find index in weighted_A
+                    idx = sum(1 for j in range(i) if j != mode)
+                    mttkrp_factors.append(weighted_A[idx])
+            
+            # compute MTTKRP
+            self.tenpy.MTTKRP(self.T, mttkrp_factors, mode)
+            rhs = mttkrp_factors[mode]
+            
+            # apply metric sqrt to rhs
+            rhs = self.metric_sqrt[mode] @ rhs
+            
+            # solve the weighted normal equations
+            self.A[mode] = solve_sys(self.tenpy, S, rhs)
+        
+        return self.A
+    
+    def compute_objective(self):
+        """
+        compute the mahalanobis objective ||T - T_hat||_{M^{-1}}^2.
+        
+        returns:
+            scalar objective value
+        """
+        T_hat = cp_reconstruct(self.tenpy, self.A)
+        diff = self.T - T_hat
+        return mahalanobis_norm(self.tenpy, diff, self.metric_factors)
 
 class CP_AMDM_Optimizer():
     """
