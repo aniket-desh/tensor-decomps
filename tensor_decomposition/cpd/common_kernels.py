@@ -131,10 +131,31 @@ def solve_sys_svd(tenpy, G, RHS):
     return tenpy.dot(X, VT)
 
 def solve_sys(tenpy, G, RHS):
-    L = tenpy.cholesky(G)
-    X = tenpy.solve_tri(L, RHS, True, False, True)
-    X = tenpy.solve_tri(L, X, True, False, False)
-    return X
+    """
+    Solve the linear system G @ X = RHS using Cholesky decomposition.
+    Falls back to SVD-based solver if G is not positive definite.
+    """
+    try:
+        L = tenpy.cholesky(G)
+        X = tenpy.solve_tri(L, RHS, True, False, True)
+        X = tenpy.solve_tri(L, X, True, False, False)
+        return X
+    except (np.linalg.LinAlgError, la.LinAlgError):
+        # Fall back to SVD-based solver for ill-conditioned systems
+        # This can happen with high noise or near-singular factors
+        # Solve G @ X^T = RHS^T where G is R x R, RHS is n x R
+        # Using SVD: G = U @ diag(s) @ V^T, so G^{-1} = V @ diag(1/s) @ U^T
+        # Then X = RHS @ G^{-1} = RHS @ V @ diag(1/s) @ U^T
+        U, s, VT = tenpy.svd(G)
+        # Clip small singular values for numerical stability
+        s_inv = np.where(s > 1e-10, 1.0 / s, 0.0)
+        # Compute RHS @ V
+        RHS_V = tenpy.dot(RHS, VT.T)
+        # Scale by inverse singular values
+        scaled = RHS_V * s_inv[np.newaxis, :]
+        # Multiply by U^T
+        X = tenpy.dot(scaled, U.T)
+        return X
 
 def get_residual3(tenpy, T, A, B, C):
     t0 = time.time()
