@@ -36,7 +36,7 @@ except:
 from .backend import get_backend
 
 # cp decomposition optimizers
-from .CPD import (
+from .cpd import (
     CP_DTALS_Optimizer,
     CP_PPALS_Optimizer,
     CP_fastNLS_Optimizer,
@@ -45,7 +45,7 @@ from .CPD import (
 )
 
 # cp decomposition kernels
-from .CPD import (
+from .cpd import (
     cp_reconstruct,
     mahalanobis_norm,
     get_residual,
@@ -86,9 +86,13 @@ from .utils import (
 )
 
 # submodules for direct access
-from . import CPD
-from . import Tucker
-from . import tensors
+from . import cpd
+from . import tucker
+try:
+    from . import tensors
+except ImportError:
+    # tensors module requires optional dependencies (e.g., wget)
+    tensors = None
 from . import backend
 from . import utils
 
@@ -134,8 +138,8 @@ __all__ = [
     'add_col_arguments',
     'get_file_prefix',
     # submodules
-    'CPD',
-    'Tucker',
+    'cpd',
+    'tucker',
     'tensors',
     'backend',
     'utils',
