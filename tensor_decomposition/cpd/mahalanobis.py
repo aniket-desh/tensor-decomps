@@ -39,10 +39,12 @@ class CP_AMDM_MLE_Optimizer():
         self.R = A[0].shape[1]
         self.order = len(A)
         self.sp = getattr(args, 'sp', 0)
-        self.metric_factors = metric_factors  # list of M_k^{-1} matrices
+        # metric_factors are precision matrices Σ_k^{-1} (inverse covariance)
+        # This is verified by the generator which returns (U^+)^T @ U^+ ≈ (U^T U)^{-1}
+        self.metric_factors = metric_factors  # list of Σ_k^{-1} matrices
         
-        # precompute sqrt of metric factors for weighted operations
-        # M_k^{-1} = (M_k^{-1/2})^T @ M_k^{-1/2}
+        # precompute sqrt of metric factors for whitening
+        # Σ_k^{-1} = (Σ_k^{-1/2})^T @ Σ_k^{-1/2}
         self.metric_sqrt = []
         for M_inv in metric_factors:
             # compute matrix square root via eigendecomposition
@@ -51,6 +53,31 @@ class CP_AMDM_MLE_Optimizer():
             eigvals = np.maximum(eigvals, 1e-12)
             M_inv_sqrt = eigvecs @ np.diag(np.sqrt(eigvals)) @ eigvecs.T
             self.metric_sqrt.append(M_inv_sqrt)
+        
+        # whiten the tensor once: T_white = T x_0 L_0 x_1 L_1 x ... x_{N-1} L_{N-1}
+        # where L_k = metric_sqrt[k] = Σ_k^{-1/2}
+        # This transforms the problem to min ||T_white - [[A_white]]||_F^2
+        self.Tw = T.copy()
+        for mode in range(self.order):
+            # apply metric_sqrt[mode] along mode dimension
+            # T_white = T_white x_mode L_mode
+            L = self.metric_sqrt[mode]
+            # Unfold tensor along mode: reshape to (mode_dim, other_dims_product)
+            T_shape = list(self.Tw.shape)
+            mode_dim = T_shape[mode]
+            other_dims = [T_shape[i] for i in range(self.order) if i != mode]
+            other_size = int(np.prod(other_dims))
+            
+            # Move mode to first position and reshape
+            T_unfolded = np.moveaxis(self.Tw, mode, 0)
+            T_unfolded = T_unfolded.reshape(mode_dim, other_size)
+            
+            # Apply whitening: L @ T_unfolded
+            T_whitened = L @ T_unfolded
+            
+            # Reshape back and move mode back to original position
+            T_whitened = T_whitened.reshape(mode_dim, *other_dims)
+            self.Tw = np.moveaxis(T_whitened, 0, mode)
     
     def _build_mttkrp_einstr(self, mode):
         """build einsum string for weighted mttkrp at given mode."""
@@ -83,25 +110,14 @@ class CP_AMDM_MLE_Optimizer():
             updated factor matrices
         """
         for mode in range(self.order):
-            # compute weighted factors for all other modes
-            # weighted_A[i] = M_i^{-1/2} @ A[i]
+            # compute whitened factors for all other modes
+            # weighted_A[i] = Σ_i^{-1/2} @ A[i] (whitened factors)
             weighted_A = []
             for i in range(self.order):
                 if i != mode:
                     weighted_A.append(self.metric_sqrt[i] @ self.A[i])
             
-            # compute weighted mttkrp
-            # first apply metric sqrt to tensor along mode
-            # then contract with weighted factors
-            
-            # build einsum for weighted mttkrp
-            T_inds = ''.join([chr(ord('a') + i) for i in range(self.order)])
-            mode_char = chr(ord('a') + mode)
-            
-            # weighted tensor: apply M_mode^{-1/2} along mode
-            # for simplicity, we work with the full weighted normal equations
-            
-            # compute gramians of weighted factors
+            # compute gramians of whitened factors
             gramians = []
             for wA in weighted_A:
                 gramians.append(wA.T @ wA)
@@ -112,10 +128,9 @@ class CP_AMDM_MLE_Optimizer():
                 S = S * g
             S = S + Regu * np.eye(self.R)
             
-            # compute rhs: M_mode^{-1/2} @ MTTKRP with weighted factors
-            # MTTKRP: T contracted with weighted_A on all modes except mode
-            
-            # create factor list for MTTKRP (weighted factors + placeholder)
+            # compute MTTKRP using whitened tensor and whitened factors
+            # Since tensor is already whitened, we use weighted_A directly
+            # and do NOT multiply rhs by metric_sqrt[mode] anymore
             mttkrp_factors = []
             for i in range(self.order):
                 if i == mode:
@@ -125,15 +140,17 @@ class CP_AMDM_MLE_Optimizer():
                     idx = sum(1 for j in range(i) if j != mode)
                     mttkrp_factors.append(weighted_A[idx])
             
-            # compute MTTKRP
-            self.tenpy.MTTKRP(self.T, mttkrp_factors, mode)
+            # compute MTTKRP on whitened tensor
+            self.tenpy.MTTKRP(self.Tw, mttkrp_factors, mode)
             rhs = mttkrp_factors[mode]
             
-            # apply metric sqrt to rhs
-            rhs = self.metric_sqrt[mode] @ rhs
+            # solve the normal equations (no additional whitening needed)
+            A_mode_white = solve_sys(self.tenpy, S, rhs)
             
-            # solve the weighted normal equations
-            self.A[mode] = solve_sys(self.tenpy, S, rhs)
+            # unwhiten the result: A_mode = Σ_mode^{1/2} @ A_mode_white
+            # where Σ_mode^{1/2} = (Σ_mode^{-1/2})^{-1}
+            A_mode = la.solve(self.metric_sqrt[mode], A_mode_white)
+            self.A[mode] = A_mode
         
         return self.A
     

@@ -117,6 +117,9 @@ def generate_tensor_with_noise_old_model(tenpy, dims, R, k, epsilon, alpha, seed
     covs_empirical = [samples @ samples.T for samples in U]
     sample_pinv = [la.pinv(samples) for samples in U]
     covs_pinv_empirical = [samples_pinv.T @ samples_pinv for samples_pinv in sample_pinv]
+    # M_empirical_pinv are PRECISION matrices Σ_k^{-1} (inverse covariance)
+    # Specifically: M_empirical_pinv[k] = (U[k]^+)^T @ U[k]^+ ≈ (U[k]^T U[k])^{-1} = Σ_k^{-1}
+    # This is used for Mahalanobis norm: ||x||_{Σ^{-1}}^2 = x^T Σ^{-1} x
     M_empirical_pinv = covs_pinv_empirical
     
     # generate zero-mean noise factors
@@ -190,6 +193,9 @@ def generate_tensor_with_noise_new_model(tenpy, dims, R, k, epsilon, alpha, seed
     covs_empirical = [samples @ samples.T for samples in U]
     sample_pinv = [la.pinv(samples) for samples in U]
     covs_pinv_empirical = [samples_pinv.T @ samples_pinv for samples_pinv in sample_pinv]
+    # M_empirical_pinv are PRECISION matrices Σ_k^{-1} (inverse covariance)
+    # Specifically: M_empirical_pinv[k] = (U[k]^+)^T @ U[k]^+ ≈ (U[k]^T U[k])^{-1} = Σ_k^{-1}
+    # This is used for Mahalanobis norm: ||x||_{Σ^{-1}}^2 = x^T Σ^{-1} x
     M_empirical_pinv = covs_pinv_empirical
     
     # generate noise tensor using the helper function

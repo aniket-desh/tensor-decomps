@@ -1,0 +1,4 @@
+wget
+pathlib
+pillow
+pyscf

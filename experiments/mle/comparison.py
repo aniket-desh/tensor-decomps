@@ -63,6 +63,10 @@ def _eval_all(tenpy, tensor_true, tensor_noisy, factors_true, factors_hat, metri
     err_true = tensor_true - T_hat
     frob_err_true = tenpy.vecnorm(err_true)
     mahal_err_true = mahalanobis_norm(tenpy, err_true, metric_factors_oracle)
+    
+    # relative error metrics (for sanity checks)
+    frob_norm_true = tenpy.vecnorm(tensor_true)
+    rel_frob_err_true = float(frob_err_true / frob_norm_true) if frob_norm_true > 0 else 0.0
 
     # factor recovery
     fms = factor_match_score(factors_true, factors_hat)
@@ -72,6 +76,7 @@ def _eval_all(tenpy, tensor_true, tensor_noisy, factors_true, factors_hat, metri
         mahal_resid_noisy=float(mahal_resid_noisy),
         frob_err_true=float(frob_err_true),
         mahal_err_true=float(mahal_err_true),
+        rel_frob_err_true=rel_frob_err_true,
         fms=float(fms),
     )
 
@@ -79,7 +84,7 @@ def plot_from_csv(csv_path: str,
                   out_dir: str = None,
                   facet_row: str = "alpha",
                   facet_col: str = "k",
-                  metrics=("fms", "mahal_err_true"),
+                  metrics=("fms", "mahal_resid_noisy", "mahal_err_true"),
                   logx: bool = True,
                   logy: bool = False):
     """
@@ -87,7 +92,8 @@ def plot_from_csv(csv_path: str,
 
     default:
       - fms vs eps (primary "recover U" metric)
-      - mahal_err_true vs eps (model-matched error diagnostic)
+      - mahal_resid_noisy vs eps (MLE objective: Mahalanobis norm on observed residual)
+      - mahal_err_true vs eps (error to ground truth, diagnostic)
 
     faceting:
       - row = alpha (anisotropy / conditioning control)
@@ -167,7 +173,16 @@ def plot_from_csv(csv_path: str,
             for ax in g.axes.flat:
                 ax.set_yscale("log")
 
-        g.set_axis_labels("epsilon (noise scale)", metric)
+        # Set axis labels with clear description for MLE objective
+        metric_labels = {
+            "mahal_resid_noisy": "Mahalanobis objective on observed residual (MLE)",
+            "mahal_err_true": "Mahalanobis error to ground truth",
+            "fms": "Factor Match Score",
+            "frob_resid_noisy": "Frobenius residual (noisy)",
+            "frob_err_true": "Frobenius error (true)",
+        }
+        ylabel = metric_labels.get(metric, metric)
+        g.set_axis_labels("epsilon (noise scale)", ylabel)
         g.fig.suptitle(f"Experiment A: {metric} vs epsilon", y=1.02)
 
         out_path = os.path.join(out_dir, f"mle_comparison_{metric}.png")
@@ -237,8 +252,8 @@ def main():
     p.add_argument("--plot", action="store_true", help="If set, make seaborn plots from the CSV after running.")
     p.add_argument("--plot_only", action="store_true", help="If set, skip running; only plot from --out_csv.")
     p.add_argument("--plot_dir", type=str, default=join(RESULTS_DIR, "plots"))
-    p.add_argument("--plot_metrics", type=str, default="fms,mahal_err_true",
-                  help="Comma-separated list of metrics to plot. e.g. fms,mahal_err_true,frob_err_true")
+    p.add_argument("--plot_metrics", type=str, default="fms,mahal_resid_noisy,mahal_err_true",
+                  help="Comma-separated list of metrics to plot. e.g. fms,mahal_resid_noisy,mahal_err_true,frob_err_true")
     p.add_argument("--facet_row", type=str, default="alpha")
     p.add_argument("--facet_col", type=str, default="k")
     p.add_argument("--logx", action="store_true", help="Log-scale x-axis (epsilon).")
@@ -277,20 +292,23 @@ def main():
 
     for (eps, alpha, k) in itertools.product(eps_grid, alpha_grid, k_grid):
         for t in range(args.n_trials):
-            trial_seed = args.seed + 100000 * t + 1000 * int(100 * eps) + 10 * int(100 * (alpha - 1)) + k
-            np.random.seed(trial_seed)
-
+            # unique seeds for each trial, keeping within valid range [0, 2^32-1]
+            # keep seed small enough that seed * 1001 (used in generators) doesn't overflow
+            max_seed = (2**32 - 1) // 1001
+            trial_seed = (args.seed + 100000 * t + 1000 * int(100 * eps) + 10 * int(100 * (alpha - 1)) + k) % max_seed
+            
             # sample from probabilistic model
             args.epsilon = float(eps)
             args.alpha = float(alpha)
             args.k = int(k)
+            args.seed = trial_seed  # Set seed for generate_tensor and generate_initial_guess
 
             d = generate_tensor(tenpy, args)
             tensor_true = d["tensor_true"]
             tensor_noisy = d["tensor_noisy"]
             factors_true = d["factors_true"]
 
-            # oracle per-mode precision factors (Kronecker Σ0^{-1})
+            # oracle per-mode precision factors (Kronecker precision)
             metric_factors_oracle = d["m_empirical_pinv"]
 
             # init
