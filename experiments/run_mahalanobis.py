@@ -13,6 +13,8 @@ from os.path import dirname, join
 import tensor_decomposition as td
 from tensor_decomposition import (
     CP_AMDM_Optimizer,
+    cp_reconstruct,
+    mahalanobis_norm,
     get_residual,
     get_residual_sp,
     compute_condition_number,
@@ -20,6 +22,7 @@ from tensor_decomposition import (
     get_file_prefix,
 )
 from tensor_decomposition.utils import arg_defs
+import copy
 
 PARENT_DIR = dirname(__file__)
 RESULTS_DIR = join(PARENT_DIR, 'results')
@@ -51,8 +54,10 @@ def cp_mahalanobis(
     all_norm_mahalanobis_empirical = []
     
     for run in range(args.num_runs):
-        # random initialization for each run
-        factors = [np.random.rand(tensor.shape[i], args.R) for i in range(tensor.ndim)]
+        if initial_factors is not None:
+            factors = copy.deepcopy(initial_factors)
+        else:
+            factors = [np.random.rand(tensor.shape[i], args.R) for i in range(tensor.ndim)]
         print(f"[trial {run+1:02d}/{args.num_runs:02d}] starting amdm optimization")
 
         residuals = []
@@ -62,7 +67,13 @@ def cp_mahalanobis(
             csv_writer = csv.writer(
                 csv_file, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL
             )
-            
+            if run == 0:
+                csv_writer.writerow([
+                    'method', 'iteration', 'time', 'residual',
+                    'fitness', 'mahal_norm', 'cond_num'
+                ])
+                csv_file.flush()
+
         if regularization is None:
             regularization = 0
         
@@ -84,11 +95,10 @@ def cp_mahalanobis(
                 fitness = 1 - res / norm_t
                 
                 # compute mahalanobis norm
-                t_reconstructed = tenpy.zeros(tensor.shape)
-                t_reconstructed = t_reconstructed + tenpy.einsum('ir,jr,kr->ijk', *factors)
+                t_reconstructed = cp_reconstruct(tenpy, factors)
                 diff = tensor_true - t_reconstructed
-                norm_mahalanobis_empirical = np.einsum(
-                    'ip,jq,kr,ijk,pqr->', *m_empirical_pinv, diff, diff
+                norm_mahalanobis_empirical = mahalanobis_norm(
+                    tenpy, diff, m_empirical_pinv
                 )
                 norm_mahalanobis_emp.append(norm_mahalanobis_empirical)
                 
@@ -102,8 +112,8 @@ def cp_mahalanobis(
                     print(f"[info] iter={k} | residual={res:.2e} | fitness={fitness:.4f}")
                     if csv_file is not None:
                         csv_writer.writerow([
-                            method, k, time_all, res, fitness, cond,
-                            norm_mahalanobis_empirical
+                            method, k, time_all, res, fitness,
+                            norm_mahalanobis_empirical, cond
                         ])
                         csv_file.flush()
             

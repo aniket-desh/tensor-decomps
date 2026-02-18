@@ -1,3 +1,0 @@
-﻿colorlover
-matplotlib
-seaborn

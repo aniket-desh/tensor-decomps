@@ -114,11 +114,15 @@ def generate_tensor_with_noise_old_model(tenpy, dims, R, k, epsilon, alpha, seed
     T = T / R
     
     # compute empirical covariance matrices for each mode
+    # note: covs_empirical[k] = U_k @ U_k^T = sum_r u_r u_r^T (sum of R outer products,
+    # NOT the sample covariance (1/R) sum_r u_r u_r^T). this is intentional -- the metric
+    # factors below absorb the scaling, so the overall mahalanobis norm is consistent.
     covs_empirical = [samples @ samples.T for samples in U]
     sample_pinv = [la.pinv(samples) for samples in U]
+    # metric_factors[k] = pinv(U_k)^T @ pinv(U_k), a precision-like (n_k x n_k) matrix
     covs_pinv_empirical = [samples_pinv.T @ samples_pinv for samples_pinv in sample_pinv]
     M_empirical_pinv = covs_pinv_empirical
-    
+
     # generate zero-mean noise factors
     U_tilde = []
     for i in range(N):
@@ -187,11 +191,15 @@ def generate_tensor_with_noise_new_model(tenpy, dims, R, k, epsilon, alpha, seed
     T = T / R
     
     # compute empirical covariance matrices for each mode
+    # note: covs_empirical[k] = U_k @ U_k^T = sum_r u_r u_r^T (sum of R outer products,
+    # NOT the sample covariance (1/R) sum_r u_r u_r^T). this is intentional -- the metric
+    # factors below absorb the scaling, so the overall mahalanobis norm is consistent.
     covs_empirical = [samples @ samples.T for samples in U]
     sample_pinv = [la.pinv(samples) for samples in U]
+    # metric_factors[k] = pinv(U_k)^T @ pinv(U_k), a precision-like (n_k x n_k) matrix
     covs_pinv_empirical = [samples_pinv.T @ samples_pinv for samples_pinv in sample_pinv]
     M_empirical_pinv = covs_pinv_empirical
-    
+
     # generate noise tensor using the helper function
     NoiseT = _generate_noise_tensor(tenpy, U, k, epsilon)
     T_noise = T + NoiseT

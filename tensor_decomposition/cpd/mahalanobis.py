@@ -24,11 +24,19 @@ class CP_AMDM_MLE_Optimizer():
     
     which reduces to solving weighted normal equations with the known metric.
     
+    metric orientation:
+        metric_factors[k] = pinv(U_k)^T @ pinv(U_k) where U_k has shape (n_k, R).
+        for full column rank U_k: pinv(U_k) = (U_k^T U_k)^{-1} U_k^T,
+        so metric_factors[k] = U_k (U_k^T U_k)^{-2} U_k^T (not simply (U_k U_k^T)^{-1}).
+        this is the precision-like matrix from the generator's pseudoinverse computation.
+        the matrix square root M_k^{-1/2} is computed via eigendecomposition and used
+        to form weighted normal equations for each mode update.
+
     args:
         tenpy: tensor backend (numpy or ctf)
         T: input tensor to decompose
         A: initial factor matrices
-        metric_factors: list of per-mode metric matrices M_k^{-1} from generator
+        metric_factors: list of per-mode metric matrices pinv(U_k)^T @ pinv(U_k) from generator
         args: argument namespace with optimization parameters
     """
     
